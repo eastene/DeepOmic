@@ -69,7 +69,7 @@ class AutoEncoder:
         self.next_elem = self.dataset_iter.get_next()
 
         # Autoencoder model
-        self.x = self.next_elem  # tf.placeholder(tf.float32, shape=[1, 1317])
+        self.x = tf.placeholder(tf.float32, shape=[None, 1317])
         self.encoder = tf.layers.dense(self.x, self.n_visible, activation=tf.nn.sigmoid)
         self.decoder = tf.layers.dense(self.encoder, self.n_hidden, activation=tf.nn.sigmoid)
         self.loss = tf.losses.cosine_distance(labels=self.x, predictions=self.decoder, axis=1)
@@ -97,7 +97,6 @@ class AutoEncoder:
         init_op = tf.global_variables_initializer()
         """
 
-        #TODO Reenable GPU
         with tf.Session() as sess:
             sess.run(self.init_op)
             sess.run(self.dataset_iter.initializer)
@@ -106,8 +105,9 @@ class AutoEncoder:
                 avg_cost = 0.0
                 #TODO make batches = num_examples // batch_size
                 for batch in range(108):
+                    feed_dict = {self.x: sess.run(self.next_elem)}
 
-                    _, c = sess.run([self.train_op, self.loss])
+                    _, c = sess.run([self.train_op, self.loss], feed_dict=feed_dict)
 
                     # TODO make batches = num_examples // batch_size
                     avg_cost += c / 108
@@ -115,6 +115,13 @@ class AutoEncoder:
                     if epoch % 3 == 0 and batch == 0:
                         print("Epoch:", (epoch + 1), "cost =", "{:.3f}".format(avg_cost))
 
+                print(self.transform(sess.run(self.next_elem)))
+
+    def transform(self, X):
+        with tf.Session() as sess:
+            X_new = sess.run(self.encoder, {self.x: X})
+
+            return X_new
 
 if __name__ == '__main__':
     ae = AutoEncoder(100,1317,0.01)
