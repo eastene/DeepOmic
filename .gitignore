@@ -1,0 +1,10 @@
+# Pycharm Files
+*.xml
+.idea/
+
+# Python Interpreter
+venv/
+
+# Data files
+*.tfrecord
+*.csv
