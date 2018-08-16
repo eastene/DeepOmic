@@ -70,7 +70,8 @@ def cross_entropy_emphasized_loss(labels,
     x = tf.gather(labels, uncorrupt, axis=axis)
     z = tf.gather(predictions, uncorrupt, axis=axis)
 
-    return tf.add(tf.multiply(a, tf.pow(tf.reduce_sum(tf.add(tf.multiply(x_c, tf.log(z_c)),
-                                                             tf.multiply(1 - x_c, tf.log(1 - z_c)))), 2)),
-                  tf.multiply(b, tf.pow(tf.reduce_sum(tf.add(tf.multiply(x, tf.log(z)),
-                                                             tf.multiply(1 - x, tf.log(1 - z)))), 2)))
+    #TODO something is going wrong here (?)
+    return tf.add(tf.multiply(a, -tf.reduce_sum(tf.add(tf.multiply(x_c, tf.log(z_c)),
+                                                       tf.multiply(1.0 - x_c, tf.log(1.0 - z_c))))),
+                  tf.multiply(b, -tf.reduce_sum(tf.add(tf.multiply(x, tf.log(z)),
+                                                       tf.multiply(1.0 - x, tf.log(1.0 - z))))))
