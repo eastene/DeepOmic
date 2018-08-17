@@ -5,7 +5,6 @@
 #
 """
 
-from math import log
 import numpy as np
 import tensorflow as tf
 
@@ -47,16 +46,16 @@ def cross_entropy_emphasized_loss(labels,
                                   alpha=0.3,
                                   beta=0.7):
     """
-        Compute cross entropy loss over training examples that have been
-        corrupted along certain dimensions
-        :param labels: tensor of training example with no corruption added
-        :param predictions: output tensor of autoencoder
-        :param corrupted_inds: indices of corrupted dimensions (if any)
-        :param axis: axis along which components are taken
-        :param alpha: weight for error on components that were corrupted
-        :param beta: weight for error on components that were not corrupted
-        :return: cross entropy loss, emphasized by corrupted component weight
-        """
+    Compute cross entropy loss over training examples that have been
+    corrupted along certain dimensions
+    :param labels: tensor of training example with no corruption added
+    :param predictions: output tensor of autoencoder
+    :param corrupted_inds: indices of corrupted dimensions (if any)
+    :param axis: axis along which components are taken
+    :param alpha: weight for error on components that were corrupted
+    :param beta: weight for error on components that were not corrupted
+    :return: cross entropy loss, emphasized by corrupted component weight
+    """
     assert (labels.shape[axis] == predictions.shape[axis])
     assert (labels.dtype == predictions.dtype)
 
