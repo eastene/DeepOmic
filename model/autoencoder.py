@@ -1,14 +1,17 @@
 import tensorflow as tf
+from tensorflow.python import debug as tf_debug
 
+from model.loss import squared_emphasized_loss
 
 tf.logging.set_verbosity(tf.logging.INFO)
-tf.flags.DEFINE_integer("num_parallel_readers", 1, "number of parallel I/O threads")
-tf.flags.DEFINE_integer("shuffle_buffer_size", 3, "size (in batches) of in-memory buffer for dataset shuffling")
+tf.flags.DEFINE_integer("num_parallel_readers", 8, "number of parallel I/O threads")
+tf.flags.DEFINE_integer("shuffle_buffer_size", 200, "size (in batches) of in-memory buffer for dataset shuffling")
 tf.flags.DEFINE_integer("batch_size", 10, "batch size")
-tf.flags.DEFINE_integer("num_parallel_calls", 1, "number of parallel dataset parsing threads "
+tf.flags.DEFINE_integer("num_parallel_calls", 8, "number of parallel dataset parsing threads "
                                                 "(recommended to be equal to number of CPU cores")
-tf.flags.DEFINE_integer("prefetch_buffer_size", 3, "size (in batches) of in-memory buffer to prefetch records before parsing")
+tf.flags.DEFINE_integer("prefetch_buffer_size", 200, "size (in batches) of in-memory buffer to prefetch records before parsing")
 tf.flags.DEFINE_integer("num_epochs", 100, "number of epochs for training")
+tf.flags.DEFINE_string("checkpoint_dir", "/tmp/DeepOmic/", "directory in which to save model checkpoints")
 
 FLAGS = tf.flags.FLAGS
 
@@ -38,9 +41,10 @@ def input_fn():
     dataset = dataset.cache()
 
     # shuffle data and repeat (if num epochs > 1)
-    dataset = dataset.apply(
-        tf.contrib.data.shuffle_and_repeat(buffer_size=FLAGS.shuffle_buffer_size)
-    )
+    #dataset = dataset.apply(
+    #    tf.contrib.data.shuffle(buffer_size=FLAGS.shuffle_buffer_size)
+    #)
+    dataset.shuffle(buffer_size=FLAGS.shuffle_buffer_size)
 
     # parse the data and prepares the batches in parallel (helps most with larger batches)
     dataset = dataset.apply(
@@ -58,8 +62,8 @@ def input_fn():
 
 class AutoEncoder:
 
-    def __init__(self, n_visible, n_hidden, learning_rate, n_epochs=10, batch_size=100):
-        self.n_visible = n_visible
+    def __init__(self, n_hidden, learning_rate):
+        # hyper parameters
         self.n_hidden = n_hidden
         self.learning_rate = learning_rate
 
@@ -70,52 +74,49 @@ class AutoEncoder:
 
         # Autoencoder model
         self.x = tf.placeholder(tf.float32, shape=[None, 1317])
-        self.encoder = tf.layers.dense(self.x, self.n_visible, activation=tf.nn.sigmoid)
-        self.decoder = tf.layers.dense(self.encoder, self.n_hidden, activation=tf.nn.sigmoid)
-        self.loss = tf.losses.cosine_distance(labels=self.x, predictions=self.decoder, axis=1)
+        self.encoder = tf.layers.dense(self.x, self.n_hidden, activation=tf.nn.sigmoid)
+        self.decoder = tf.layers.dense(self.encoder, self.x.shape[1], activation=tf.nn.sigmoid)
+        self.loss = squared_emphasized_loss(labels=self.x, predictions=self.decoder,
+                                            corrupted_inds=None, axis=1, alpha=0, beta=1) #tf.losses.cosine_distance(labels=self.x, predictions=self.decoder, axis=1)
         self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.train.get_global_step())
         self.init_op = tf.global_variables_initializer()
+
+        # Model saver
+        self.saver = tf.train.Saver()
 
     def run_epoch(self):
         pass
 
     def train(self):
-        """
-        # iterator for training examples
-        dataset = input_fn()
-        dataset_iter = dataset.make_initializable_iterator()
-        next_elem = dataset_iter.get_next()
-
-        # Autoencoder model
-        x = next_elem #tf.placeholder(tf.float32, shape=[1, 1317])
-        encoder = tf.layers.dense(x, self.n_visible, activation=tf.nn.sigmoid)
-        decoder = tf.layers.dense(encoder, self.n_hidden, activation=tf.nn.sigmoid)
-        loss = tf.losses.cosine_distance(labels=x, predictions=decoder, axis=1)
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
-        train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
-        init_op = tf.global_variables_initializer()
-        """
-
         with tf.Session() as sess:
-            sess.run(self.init_op)
-            sess.run(self.dataset_iter.initializer)
+            #TODO remove after debugging
+            #sess = tf_debug.LocalCLIDebugWrapperSession(sess, ui_type="readline")  # readline for PyCharm interface
+
+            if tf.train.checkpoint_exists(FLAGS.checkpoint_dir):
+                self.saver.restore(sess, FLAGS.checkpoint_dir)
+                print("Model restored.")
+            else:
+                sess.run(self.init_op)
 
             for epoch in range(FLAGS.num_epochs):
-                avg_cost = 0.0
-                #TODO make batches = num_examples // batch_size
-                for batch in range(108):
-                    feed_dict = {self.x: sess.run(self.next_elem)}
+                c = 0
+                n_batches = 0
+                sess.run(self.dataset_iter.initializer)
 
-                    _, c = sess.run([self.train_op, self.loss], feed_dict=feed_dict)
+                try:
+                    while True:
+                        feed_dict = {self.x: sess.run(self.next_elem)}
+                        _, c = sess.run([self.train_op, self.loss], feed_dict=feed_dict)
+                        n_batches += 1
 
-                    # TODO make batches = num_examples // batch_size
-                    avg_cost += c / 108
+                except tf.errors.OutOfRangeError:
+                    pass  # end of data set reached, proceed to next epoch
 
-                    if epoch % 3 == 0 and batch == 0:
-                        print("Epoch:", (epoch + 1), "cost =", "{:.3f}".format(avg_cost))
-
-                print(self.transform(sess.run(self.next_elem)))
+                if epoch % 3 == 0:
+                    print("Epoch:", (epoch + 1), "cost =", "{:.3f}".format(c / n_batches))
+                    save_path = self.saver.save(sess, FLAGS.checkpoint_dir)
+                    print("Model saved in path: %s" % save_path)
 
     def transform(self, X):
         with tf.Session() as sess:
@@ -123,6 +124,7 @@ class AutoEncoder:
 
             return X_new
 
+
 if __name__ == '__main__':
-    ae = AutoEncoder(100,1317,0.01)
+    ae = AutoEncoder(1000,0.01)
     ae.train()

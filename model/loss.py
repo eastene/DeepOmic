@@ -11,8 +11,8 @@ import tensorflow as tf
 
 def squared_emphasized_loss(labels,
                             predictions,
-                            corrupted_inds,
                             axis,
+                            corrupted_inds=None,
                             alpha=0.3,
                             beta=0.7):
     """
@@ -20,7 +20,7 @@ def squared_emphasized_loss(labels,
     corrupted along certain dimensions
     :param labels: tensor of training example with no corruption added
     :param predictions: output tensor of autoencoder
-    :param corrupted_inds: indices of corrupted dimensions (if any)
+    :param corrupted_inds: indices of corrupted dimensions (if no dimensions are corrupt, leave as None)
     :param axis: axis along which components are taken
     :param alpha: weight for error on components that were corrupted
     :param beta: weight for error on components that were not corrupted
@@ -29,14 +29,21 @@ def squared_emphasized_loss(labels,
     assert(labels.shape[axis] == predictions.shape[axis])
     assert(labels.dtype == predictions.dtype)
 
-    uncorrupted_inds = np.delete(np.arange(labels.shape[axis].value), corrupted_inds)
-    x_c = tf.gather(labels, corrupted_inds, axis=axis)
-    z_c = tf.gather(predictions, corrupted_inds, axis=axis)
-    x = tf.gather(labels, uncorrupted_inds, axis=axis)
-    z = tf.gather(predictions, uncorrupted_inds, axis=axis)
+    # if training on examples with corrupted indices
+    if corrupted_inds is not None:
+        x_c = tf.gather(labels, corrupted_inds, axis=axis)
+        z_c = tf.gather(predictions, corrupted_inds, axis=axis)
+        uncorrupted_inds = np.delete(np.arange(labels.shape[axis].value), corrupted_inds)
+        x = tf.gather(labels, uncorrupted_inds, axis=axis)
+        z = tf.gather(predictions, uncorrupted_inds, axis=axis)
+        lhs = alpha * tf.reduce_sum(tf.square(tf.subtract(x_c, z_c)))
+        rhs = beta * tf.reduce_sum(tf.square(tf.subtract(x, z)))
+    # if training on uncorrupted examples, no need to select indices and alpha effectively 0
+    else:
+        lhs = 0.0
+        rhs = beta * tf.reduce_sum(tf.square(tf.subtract(labels, predictions)))
 
-    return tf.add(alpha * tf.reduce_sum(tf.square(tf.subtract(x_c, z_c))),
-                  beta * tf.reduce_sum(tf.square(tf.subtract(x, z))))
+    return tf.add(lhs, rhs)
 
 
 def cross_entropy_emphasized_loss(labels,
