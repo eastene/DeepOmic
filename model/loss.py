@@ -30,16 +30,14 @@ def squared_emphasized_loss(labels,
     assert(labels.shape[axis] == predictions.shape[axis])
     assert(labels.dtype == predictions.dtype)
 
-    uncorrupt = np.delete(np.arange(labels.shape[axis].value), corrupted_inds)
-    a = tf.constant(alpha, dtype=labels.dtype)
-    b = tf.constant(beta, dtype=labels.dtype)
+    uncorrupted_inds = np.delete(np.arange(labels.shape[axis].value), corrupted_inds)
     x_c = tf.gather(labels, corrupted_inds, axis=axis)
     z_c = tf.gather(predictions, corrupted_inds, axis=axis)
-    x = tf.gather(labels, uncorrupt, axis=axis)
-    z = tf.gather(predictions, uncorrupt, axis=axis)
+    x = tf.gather(labels, uncorrupted_inds, axis=axis)
+    z = tf.gather(predictions, uncorrupted_inds, axis=axis)
 
-    return tf.add(tf.multiply(a, tf.pow(tf.reduce_sum(tf.subtract(x_c, z_c)), 2)),
-                  tf.multiply(b, tf.pow(tf.reduce_sum(tf.subtract(x, z)), 2)))
+    return tf.add(alpha * tf.reduce_sum(tf.square(tf.subtract(x_c, z_c))),
+                  beta * tf.reduce_sum(tf.square(tf.subtract(x, z))))
 
 
 def cross_entropy_emphasized_loss(labels,
@@ -62,16 +60,13 @@ def cross_entropy_emphasized_loss(labels,
     assert (labels.shape[axis] == predictions.shape[axis])
     assert (labels.dtype == predictions.dtype)
 
-    uncorrupt = np.delete(np.arange(labels.shape[axis].value), corrupted_inds)
-    a = tf.constant(alpha, dtype=labels.dtype)
-    b = tf.constant(beta, dtype=labels.dtype)
+    uncorrupted_inds = np.delete(np.arange(labels.shape[axis].value), corrupted_inds)
     x_c = tf.gather(labels, corrupted_inds, axis=axis)
     z_c = tf.gather(predictions, corrupted_inds, axis=axis)
-    x = tf.gather(labels, uncorrupt, axis=axis)
-    z = tf.gather(predictions, uncorrupt, axis=axis)
+    x = tf.gather(labels, uncorrupted_inds, axis=axis)
+    z = tf.gather(predictions, uncorrupted_inds, axis=axis)
 
-    #TODO something is going wrong here (?)
-    return tf.add(tf.multiply(a, -tf.reduce_sum(tf.add(tf.multiply(x_c, tf.log(z_c)),
-                                                       tf.multiply(1.0 - x_c, tf.log(1.0 - z_c))))),
-                  tf.multiply(b, -tf.reduce_sum(tf.add(tf.multiply(x, tf.log(z)),
-                                                       tf.multiply(1.0 - x, tf.log(1.0 - z))))))
+    return tf.add(alpha * (-tf.reduce_sum(tf.add(tf.multiply(x_c, tf.log(z_c)),
+                                             tf.multiply(1.0 - x_c, tf.log(1.0 - z_c))))),
+                  beta * (-tf.reduce_sum(tf.add(tf.multiply(x, tf.log(z)),
+                                             tf.multiply(1.0 - x, tf.log(1.0 - z))))))
