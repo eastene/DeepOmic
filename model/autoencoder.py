@@ -1,63 +1,15 @@
+"""
+#
+# Defines simple Autoencoder with encoder/decoder layers
+#
+"""
+
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
 
+from model.flags import FLAGS
 from model.loss import squared_emphasized_loss
-
-tf.logging.set_verbosity(tf.logging.INFO)
-tf.flags.DEFINE_integer("num_parallel_readers", 8, "number of parallel I/O threads")
-tf.flags.DEFINE_integer("shuffle_buffer_size", 200, "size (in batches) of in-memory buffer for dataset shuffling")
-tf.flags.DEFINE_integer("batch_size", 10, "batch size")
-tf.flags.DEFINE_integer("num_parallel_calls", 8, "number of parallel dataset parsing threads "
-                                                "(recommended to be equal to number of CPU cores")
-tf.flags.DEFINE_integer("prefetch_buffer_size", 200, "size (in batches) of in-memory buffer to prefetch records before parsing")
-tf.flags.DEFINE_integer("num_epochs", 100, "number of epochs for training")
-tf.flags.DEFINE_string("checkpoint_dir", "/tmp/DeepOmic/", "directory in which to save model checkpoints")
-
-FLAGS = tf.flags.FLAGS
-
-INPUT_FILE_PATTERN = "/home/evan/PycharmProjects/DeepOmic/data/prepared_tf/*.tfrecord"
-
-
-def omic_data_parse_fn(example):
-    # format of each training example
-    example_fmt = {
-        "X": tf.FixedLenFeature((1317,), tf.float32)  # 1317 = number of SOMA attributes
-    }
-
-    parsed = tf.parse_single_example(example, example_fmt)
-    return parsed['X']
-
-
-def input_fn():
-    files = tf.data.Dataset.list_files(file_pattern=INPUT_FILE_PATTERN, shuffle=False)
-
-    # interleave reading of dataset for parallel I/O
-    dataset = files.apply(
-        tf.contrib.data.parallel_interleave(
-            tf.data.TFRecordDataset, cycle_length=FLAGS.num_parallel_readers
-        )
-    )
-
-    dataset = dataset.cache()
-
-    # shuffle data and repeat (if num epochs > 1)
-    #dataset = dataset.apply(
-    #    tf.contrib.data.shuffle(buffer_size=FLAGS.shuffle_buffer_size)
-    #)
-    dataset.shuffle(buffer_size=FLAGS.shuffle_buffer_size)
-
-    # parse the data and prepares the batches in parallel (helps most with larger batches)
-    dataset = dataset.apply(
-        tf.contrib.data.map_and_batch(
-            map_func=omic_data_parse_fn, batch_size=FLAGS.batch_size
-        )
-    )
-
-    # prefetch data so that the CPU can prepare the next batch(s) while the GPU trains
-    # recommmend setting buffer size to number of training examples per training step
-    dataset = dataset.prefetch(buffer_size=FLAGS.prefetch_buffer_size)
-
-    return dataset
+from model.input_pipeline import input_fn
 
 
 class AutoEncoder:
@@ -85,8 +37,19 @@ class AutoEncoder:
         # Model saver
         self.saver = tf.train.Saver()
 
-    def run_epoch(self):
-        pass
+    def run_epoch(self, sess):
+        c = 0
+        n_batches = 0
+        sess.run(self.dataset_iter.initializer)
+
+        try:
+            while True:
+                feed_dict = {self.x: sess.run(self.next_elem)}
+                _, c = sess.run([self.train_op, self.loss], feed_dict=feed_dict)
+                n_batches += 1
+
+        except tf.errors.OutOfRangeError:
+            return c, n_batches  # end of data set reached, proceed to next epoch
 
     def train(self):
         with tf.Session() as sess:
@@ -100,18 +63,8 @@ class AutoEncoder:
                 sess.run(self.init_op)
 
             for epoch in range(FLAGS.num_epochs):
-                c = 0
-                n_batches = 0
-                sess.run(self.dataset_iter.initializer)
 
-                try:
-                    while True:
-                        feed_dict = {self.x: sess.run(self.next_elem)}
-                        _, c = sess.run([self.train_op, self.loss], feed_dict=feed_dict)
-                        n_batches += 1
-
-                except tf.errors.OutOfRangeError:
-                    pass  # end of data set reached, proceed to next epoch
+                c, n_batches = self.run_epoch(sess)
 
                 if epoch % 3 == 0:
                     print("Epoch:", (epoch + 1), "cost =", "{:.3f}".format(c / n_batches))
@@ -120,7 +73,29 @@ class AutoEncoder:
 
     def transform(self, X):
         with tf.Session() as sess:
+            if tf.train.checkpoint_exists(FLAGS.checkpoint_dir):
+                self.saver.restore(sess, FLAGS.checkpoint_dir)
+                print("Model loaded.")
+            else:
+                print("No existing encoder found.")
+                exit(1)
+
             X_new = sess.run(self.encoder, {self.x: X})
+
+            return X_new
+
+    def reverse_transform(self, X):
+        assert(X.shape[1] == self.n_hidden)  # assert reversing already transformed data
+
+        with tf.Session() as sess:
+            if tf.train.checkpoint_exists(FLAGS.checkpoint_dir):
+                self.saver.restore(sess, FLAGS.checkpoint_dir)
+                print("Model loaded.")
+            else:
+                print("No existing decoder found.")
+                exit(1)
+
+            X_new = sess.run(self.decoder, {self.x: X})
 
             return X_new
 
