@@ -26,6 +26,7 @@ class AutoEncoder:
 
         # Autoencoder model
         self.x = tf.placeholder(tf.float32, shape=[None, 1317])
+        # TODO add support for encoding corrupted examples, possibly by adding a new variable to hold them
         self.encoder = tf.layers.dense(self.x, self.n_hidden, activation=tf.nn.sigmoid)
         self.decoder = tf.layers.dense(self.encoder, self.x.shape[1], activation=tf.nn.sigmoid)
         self.loss = squared_emphasized_loss(labels=self.x, predictions=self.decoder,

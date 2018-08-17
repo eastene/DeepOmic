@@ -15,6 +15,7 @@ def omic_data_parse_fn(example):
     # format of each training example
     example_fmt = {
         "X": tf.FixedLenFeature((1317,), tf.float32)  # 1317 = number of SOMA attributes
+        # TODO: add another entry for corrupted examples (if corruption occurs at file level)
     }
 
     parsed = tf.parse_single_example(example, example_fmt)
