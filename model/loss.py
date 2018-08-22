@@ -41,7 +41,7 @@ def squared_emphasized_loss(labels,
     # if training on uncorrupted examples, no need to select indices and alpha effectively 0
     else:
         lhs = 0.0
-        rhs = beta * tf.reduce_sum(tf.square(tf.subtract(labels, predictions)))
+        rhs = 1.0 * tf.reduce_sum(tf.square(tf.subtract(labels, predictions)))
 
     return tf.add(lhs, rhs)
 

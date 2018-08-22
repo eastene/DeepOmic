@@ -4,7 +4,7 @@ class Decoder:
     def __init__(self, input, output_shape, name = None):
         self.input = input
         #self.input = tf.placeholder(tf.float32, shape=[None, input_shape])
-        self.layer = tf.layers.dense(self.input, output_shape, name=name,activation=tf.nn.sigmoid)
+        self.layer = tf.layers.dense(self.input, output_shape, name=name, activation=tf.nn.sigmoid)
 
     def reverse_transform(self, sess, input):
         """

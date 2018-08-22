@@ -7,11 +7,12 @@ from model.input_pipeline import InputPipeline
 from model.decoder import Decoder
 from model.encoder import Encoder
 
+FILE_PATTERN = "*.tfrecord"
 
 class DeepOmicModel:
 
     def __init__(self, learning_rate):
-        self.dataset = InputPipeline()
+        self.dataset = InputPipeline(FILE_PATTERN)
         self.next_train_elem = self.dataset.next_train_elem()
         self.next_eval_elem = self.dataset.next_eval_elem()
         self.input = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
@@ -155,5 +156,5 @@ class DeepOmicModel:
 
 
 if __name__ == '__main__':
-    dom = DeepOmicModel(0.001)
+    dom = DeepOmicModel(0.0001)
     dom.train()
