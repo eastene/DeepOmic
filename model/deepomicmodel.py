@@ -30,7 +30,8 @@ class DeepOmicModel:
         """
         self.learning_rate = learning_rate
         print(str(self.input.shape) + "  " + str(self.decode_layers[-1].layer.shape))
-        self.loss = squared_emphasized_loss(labels=self.input, predictions=self.decode_layers[-1].layer,corrupted_inds=None, axis=1, alpha=0, beta=1) #tf.losses.cosine_distance(labels=self.x, predictions=self.decoder, axis=1)
+        self.loss = squared_emphasized_loss(labels=self.input, predictions=self.decode_layers[-1].layer,
+                                            corrupted_inds=None, axis=1, alpha=0, beta=1)
         self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.train.get_global_step())
 
