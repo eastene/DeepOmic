@@ -37,7 +37,10 @@ class DeepOmicModel:
 
         # Build Encoder layers
         for ind,layer_size in enumerate(layer_list):
-            layer_encoder = Encoder(prev_enc_layer,layer_size,name="Encoder_Layer_"+str(ind))
+            dropout=False
+            if ind == 0:
+                dropout = True
+            layer_encoder = Encoder(prev_enc_layer,layer_size,name="Encoder_Layer_"+str(ind),dropout=dropout)
             self.encode_layers.append(layer_encoder)
             prev_enc_layer = layer_encoder.layer
 
@@ -81,10 +84,9 @@ class DeepOmicModel:
 
                 c, n_batches = self.run_epoch(sess)
 
-                if epoch % 3 == 0:
-                    print("Epoch:", (epoch + 1), "cost =", "{:.3f}".format(c / n_batches))
-                    save_path = self.saver.save(sess, FLAGS.checkpoint_dir)
-                    print("Model saved in path: %s" % save_path)
+                print("Epoch:", (epoch + 1), "cost =", "{:.3f}".format(c / n_batches))
+                save_path = self.saver.save(sess, FLAGS.checkpoint_dir)
+                print("Model saved in path: %s" % save_path)
 
     def transform(self, X):
         # Oper TF Session
@@ -121,8 +123,5 @@ class DeepOmicModel:
             return cur_data
 
 if __name__ == '__main__':
-    dom = DeepOmicModel(0.01)
-    with tf.Session() as sess:
-        sess.run([dom.dataset_iter.initializer,dom.init_op])
-        test_data = sess.run(dom.next_elem)
-        test = dom.transform(test_data)
+    dom = DeepOmicModel(0.001)
+    dom.train()

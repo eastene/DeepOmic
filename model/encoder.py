@@ -1,10 +1,14 @@
 import tensorflow as tf
 
 class Encoder:
-    def __init__(self, input, output_shape, name = None):
+    def __init__(self, input, output_shape, name = None, dropout=False):
         self.input = input
         #self.input = tf.placeholder(tf.float32, shape=[None, input_shape])
-        self.layer = tf.layers.dense(self.input, output_shape,name=name, activation=tf.nn.sigmoid)
+        if dropout == True:
+            self.d_layer = tf.layers.dense(self.input, output_shape,name=name,activation=tf.nn.sigmoid)
+            self.layer = tf.layers.dropout(self.d_layer)
+        else:
+            self.layer = tf.layers.dense(self.input, output_shape,name=name, activation=tf.nn.sigmoid)
 
     def transform(self, sess, input):
         """
