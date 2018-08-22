@@ -19,7 +19,7 @@ for f in csv_files:
 
     filename = ntpath.basename(f)
     base, ext = os.path.splitext(filename)
-    print("Writing " + base + '.tfrecord')
+    print("Writing " + base + '.tfrecord of {} records'.format(soma.shape[0]))
 
     with tf.python_io.TFRecordWriter(base + '.tfrecord') as tfwriter:
 

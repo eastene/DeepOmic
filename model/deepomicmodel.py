@@ -2,35 +2,49 @@ import tensorflow as tf
 import numpy as np
 from model.flags import FLAGS
 from model.loss import squared_emphasized_loss
-from model.input_pipeline import input_fn
+from model.input_pipeline import InputPipeline
 
 from model.decoder import Decoder
 from model.encoder import Encoder
 
-class DeepOmicModel:
-    def __init__(self, learning_rate):
-        self.dataset = input_fn()
-        self.dataset_iter = self.dataset.make_initializable_iterator()
-        self.next_elem = self.dataset_iter.get_next()
 
+class DeepOmicModel:
+
+    def __init__(self, learning_rate):
+        self.dataset = InputPipeline()
+        self.next_train_elem = self.dataset.next_train_elem()
+        self.next_eval_elem = self.dataset.next_eval_elem()
+        self.input = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
+
+        """
+        MODEL
+        """
         # List of autoencoder layers
         self.encode_layers = []
         self.decode_layers = []
-
-        self.input = tf.placeholder(tf.float32, shape=[None, 1317])
-
         self._initialize_layers(1317, [1000,500,250])
 
+        """
+        TRAIN
+        """
         self.learning_rate = learning_rate
         print(str(self.input.shape) + "  " + str(self.decode_layers[-1].layer.shape))
         self.loss = squared_emphasized_loss(labels=self.input, predictions=self.decode_layers[-1].layer,corrupted_inds=None, axis=1, alpha=0, beta=1) #tf.losses.cosine_distance(labels=self.x, predictions=self.decoder, axis=1)
         self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.train.get_global_step())
-        self.init_op = tf.global_variables_initializer()
 
-        # Model saver
+        """
+        EVAL
+        """
+        self.distance = tf.square(tf.subtract(self.input, self.decode_layers[-1].layer))
+        self.eval_op = tf.reduce_sum(self.distance)
+
+        """
+        SAVE & RESTORE
+        """
         self.saver = tf.train.Saver()
 
+        self.init_op = tf.global_variables_initializer()
 
     def _initialize_layers(self, input_data_size, layer_list = None):
         prev_enc_layer = self.input
@@ -53,18 +67,18 @@ class DeepOmicModel:
 
 
     def run_epoch(self, sess):
-        c = 0
+        c_tot = 0
         n_batches = 0
-        sess.run(self.dataset_iter.initializer)
-
+        sess.run(self.dataset.initialize_train())
         try:
             while True:
-                feed_dict={self.input : sess.run(self.next_elem)}
+                feed_dict={self.input : sess.run(self.next_train_elem)}
                 _, c, dl = sess.run([self.train_op, self.loss, self.decode_layers[-1].layer], feed_dict=feed_dict)
+                c_tot += c
                 n_batches += 1
 
         except tf.errors.OutOfRangeError:
-            return c, n_batches  # end of data set reached, proceed to next epoch
+            return c_tot, n_batches  # end of data set reached, proceed to next epoch
 
     def train(self):
         with tf.Session() as sess:
@@ -87,6 +101,23 @@ class DeepOmicModel:
                 print("Epoch:", (epoch + 1), "cost =", "{:.3f}".format(c / n_batches))
                 save_path = self.saver.save(sess, FLAGS.checkpoint_dir)
                 print("Model saved in path: %s" % save_path)
+
+            # evaluate
+            m_tot = 0
+            n_batches = 0
+            sess.run(self.dataset.initialize_eval())
+
+            try:
+                while True:
+                    feed_dict = {self.input: sess.run(self.next_eval_elem)}
+                    m = sess.run([self.eval_op], feed_dict=feed_dict)
+                    m_tot += m[0]
+                    n_batches += 1
+
+            except tf.errors.OutOfRangeError:
+                pass
+
+            print("Training Accuracy: {}".format(m_tot / n_batches))
 
     def transform(self, X):
         # Oper TF Session
@@ -121,6 +152,7 @@ class DeepOmicModel:
 
 
             return cur_data
+
 
 if __name__ == '__main__':
     dom = DeepOmicModel(0.001)

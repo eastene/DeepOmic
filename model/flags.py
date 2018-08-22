@@ -14,6 +14,7 @@ tf.flags.DEFINE_integer("num_parallel_calls", 8, "number of parallel dataset par
                                                 "(recommended to be equal to number of CPU cores")
 tf.flags.DEFINE_integer("prefetch_buffer_size", 200, "size (in batches) of in-memory buffer to prefetch records before parsing")
 tf.flags.DEFINE_integer("num_epochs", 100, "number of epochs for training")
+tf.flags.DEFINE_string("data_dir", "", "directory in which input data is located")
 tf.flags.DEFINE_string("checkpoint_dir", "/tmp/DeepOmic/", "directory in which to save model checkpoints")
 
 FLAGS = tf.flags.FLAGS
