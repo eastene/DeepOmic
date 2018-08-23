@@ -12,11 +12,12 @@ from model.flags import FLAGS
 
 class InputPipeline:
 
-    def __init__(self, file_pattern, size_of_split=10):
+    def __init__(self, file_pattern, size_of_split=10, corrupt=True):
         """
         Input pipeline based on the Tensorflow Dataset API
         :param file_pattern: regex pattern of files to include as input (.tfrecord)
         :param size_of_split: number of batches to hold for evaluation
+        :param corrupt: apply corruption to each example
         """
         self.data_dir = FLAGS.data_dir
         self.file_pattern = file_pattern
@@ -31,9 +32,12 @@ class InputPipeline:
             "X": tf.FixedLenFeature((1317,), tf.float32)  # 1317 = number of SOMA attributes
         }
 
-        # TODO: add corruption function to mapper
-
         parsed = tf.parse_single_example(example, example_fmt)
+
+        # TODO: add corruption function to mapper
+        #corrupted =
+
+
         return parsed['X']
 
     def input_fn(self):
