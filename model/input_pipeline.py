@@ -6,18 +6,28 @@
 
 import tensorflow as tf
 from os import path
+import random
 
 from model.flags import FLAGS
 
 
 class InputPipeline:
 
-    def __init__(self, file_pattern, size_of_split=10, corrupt=True):
+    def __init__(self,
+                 file_pattern,
+                 size_of_split=10,
+                 num_corrupt_examples=2,
+                 corruption_pr=0.001,
+                 corruption_str=1,
+                 seed=None):
         """
         Input pipeline based on the Tensorflow Dataset API
         :param file_pattern: regex pattern of files to include as input (.tfrecord)
         :param size_of_split: number of batches to hold for evaluation
-        :param corrupt: apply corruption to each example
+        :param num_corrupt_examples: number of corrupted examples to produce for each example read
+        :param corruption_pr: probability of corruption occuring for each dimension values between (0-1)
+        :param corruption_str: strength of corruption, multiplies corruption value applied to corrupt dimensions
+        :param seed: seed value for corruption value, default uses system time
         """
         self.data_dir = FLAGS.data_dir
         self.file_pattern = file_pattern
@@ -25,6 +35,16 @@ class InputPipeline:
         self.dataset = self.input_fn()
         self.eval_iter = self.dataset.take(size_of_split).make_initializable_iterator()
         self.train_iter = self.dataset.skip(size_of_split).make_initializable_iterator()
+        self.num_corrupt_examples = num_corrupt_examples
+        self.corruption_pr = corruption_pr
+        self.corruption_str = corruption_str
+        random.seed(seed)
+
+    def corrupt_random_dimensions(self, X):
+        return tf.map_fn(
+            lambda x: x + (0 if random.random < self.corruption_pr else random.uniform(0, 1 * self.corruption_str)),
+            X
+        )
 
     def omic_data_parse_fn(self, example):
         # format of each training example
@@ -34,11 +54,9 @@ class InputPipeline:
 
         parsed = tf.parse_single_example(example, example_fmt)
 
-        # TODO: add corruption function to mapper
-        #corrupted =
+        corrupted = [self.corrupt_random_dimensions(parsed['X']) for _ in range(self.num_corrupt_examples)]
 
-
-        return parsed['X']
+        return parsed['X'], corrupted
 
     def input_fn(self):
         print("Looking for data files matching: {}\nIn: {}".format(self.file_pattern, self.data_dir))
