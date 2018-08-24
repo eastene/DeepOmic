@@ -8,6 +8,8 @@
 import numpy as np
 import tensorflow as tf
 
+from model.flags import FLAGS
+
 
 def squared_emphasized_loss(labels,
                             predictions,
@@ -29,6 +31,8 @@ def squared_emphasized_loss(labels,
     assert(labels.shape[axis] == predictions.shape[axis])
     assert(labels.dtype == predictions.dtype)
 
+    num_elems = labels.shape[axis].value * FLAGS.batch_size
+
     # if training on examples with corrupted indices
     if corrupted_inds is not None:
         x_c = tf.gather(labels, corrupted_inds, axis=axis)
@@ -43,7 +47,7 @@ def squared_emphasized_loss(labels,
         lhs = 0.0
         rhs = 1.0 * tf.reduce_sum(tf.square(tf.subtract(labels, predictions)))
 
-    return tf.add(lhs, rhs)
+    return tf.add(lhs, rhs) / num_elems
 
 
 def cross_entropy_emphasized_loss(labels,

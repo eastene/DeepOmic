@@ -13,13 +13,7 @@ from model.flags import FLAGS
 
 class InputPipeline:
 
-    def __init__(self,
-                 file_pattern,
-                 size_of_split=10,
-                 num_corrupt_examples=2,
-                 corruption_pr=0.001,
-                 corruption_str=1,
-                 seed=None):
+    def __init__(self, file_pattern, size_of_split=10):
         """
         Input pipeline based on the Tensorflow Dataset API
         :param file_pattern: regex pattern of files to include as input (.tfrecord)
@@ -35,28 +29,17 @@ class InputPipeline:
         self.dataset = self.input_fn()
         self.eval_iter = self.dataset.take(size_of_split).make_initializable_iterator()
         self.train_iter = self.dataset.skip(size_of_split).make_initializable_iterator()
-        self.num_corrupt_examples = num_corrupt_examples
-        self.corruption_pr = corruption_pr
-        self.corruption_str = corruption_str
-        random.seed(seed)
-
-    def corrupt_random_dimensions(self, X):
-        return tf.map_fn(
-            lambda x: x + (0 if random.random < self.corruption_pr else random.uniform(0, 1 * self.corruption_str)),
-            X
-        )
 
     def omic_data_parse_fn(self, example):
         # format of each training example
         example_fmt = {
-            "X": tf.FixedLenFeature((1317,), tf.float32)  # 1317 = number of SOMA attributes
+            "X": tf.FixedLenFeature((1317,), tf.float32),  # 1317 = number of SOMA attributes
+            "Y": tf.FixedLenFeature((1317,), tf.float32)  # 1317 = number of SOMA attributes
         }
 
         parsed = tf.parse_single_example(example, example_fmt)
 
-        corrupted = [self.corrupt_random_dimensions(parsed['X']) for _ in range(self.num_corrupt_examples)]
-
-        return parsed['X'], corrupted
+        return parsed['X'], parsed['Y']
 
     def input_fn(self):
         print("Looking for data files matching: {}\nIn: {}".format(self.file_pattern, self.data_dir))

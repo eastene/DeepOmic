@@ -1,5 +1,7 @@
 import tensorflow as tf
+#from tensorflow.python import debug as tf_debug
 import numpy as np
+
 from model.flags import FLAGS
 from model.loss import squared_emphasized_loss
 from model.input_pipeline import InputPipeline
@@ -15,7 +17,9 @@ class DeepOmicModel:
         self.dataset = InputPipeline(FILE_PATTERN)
         self.next_train_elem = self.dataset.next_train_elem()
         self.next_eval_elem = self.dataset.next_eval_elem()
+
         self.input = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
+        self.expected = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
 
         """
         MODEL
@@ -30,7 +34,8 @@ class DeepOmicModel:
         """
         self.learning_rate = learning_rate
         print(str(self.input.shape) + "  " + str(self.decode_layers[-1].layer.shape))
-        self.loss = squared_emphasized_loss(labels=self.input, predictions=self.decode_layers[-1].layer,
+        self.predictions = self.decode_layers[-1].layer
+        self.loss = squared_emphasized_loss(labels=self.expected, predictions=self.decode_layers[-1].layer,
                                             corrupted_inds=None, axis=1, alpha=0, beta=1)
         self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.train.get_global_step())
@@ -39,7 +44,7 @@ class DeepOmicModel:
         EVAL
         """
         self.distance = tf.square(tf.subtract(self.input, self.decode_layers[-1].layer))
-        self.eval_op = tf.reduce_sum(self.distance)
+        self.eval_op = tf.reduce_mean(self.distance)
 
         """
         SAVE & RESTORE
@@ -74,7 +79,12 @@ class DeepOmicModel:
         sess.run(self.dataset.initialize_train())
         try:
             while True:
-                feed_dict={self.input : sess.run(self.next_train_elem)}
+                x, y = sess.run(self.next_train_elem)
+                # train on X, and corruptions of X
+                feed_dict={
+                    self.input: x,
+                    self.expected: y
+                }
                 _, c, dl = sess.run([self.train_op, self.loss, self.decode_layers[-1].layer], feed_dict=feed_dict)
                 c_tot += c
                 n_batches += 1
@@ -111,7 +121,12 @@ class DeepOmicModel:
 
             try:
                 while True:
-                    feed_dict = {self.input: sess.run(self.next_eval_elem)}
+                    x, y = sess.run(self.next_eval_elem)
+                    # train on X, and corruptions of X
+                    feed_dict = {
+                        self.input: x,
+                        self.expected: y
+                    }
                     m = sess.run([self.eval_op], feed_dict=feed_dict)
                     m_tot += m[0]
                     n_batches += 1
@@ -119,7 +134,7 @@ class DeepOmicModel:
             except tf.errors.OutOfRangeError:
                 pass
 
-            print("Training Accuracy: {}".format(m_tot / n_batches))
+            print("Mean Sum of Squares: {}".format(m_tot / n_batches))
 
     def transform(self, X):
         # Oper TF Session
@@ -157,5 +172,5 @@ class DeepOmicModel:
 
 
 if __name__ == '__main__':
-    dom = DeepOmicModel(0.0001)
+    dom = DeepOmicModel(0.01)
     dom.train()
