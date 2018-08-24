@@ -38,7 +38,7 @@ class DeepOmicModel:
         self.predictions = self.decode_layers[-1].layer
         # TODO: get corrupted indices to work correctly
         self.loss = squared_emphasized_loss(labels=self.expected, predictions=self.decode_layers[-1].layer,
-                                            corrupted_inds=self.corrupt_mask, axis=1, alpha=0, beta=1)
+                                            corrupted_inds=self.corrupt_mask, axis=1, alpha=0.4, beta=0.6)
         self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.train.get_global_step())
 
@@ -62,7 +62,7 @@ class DeepOmicModel:
         for ind,layer_size in enumerate(layer_list):
             dropout=False
             if ind == 0:
-                dropout = True
+                dropout = False
             layer_encoder = Encoder(prev_enc_layer,layer_size,name="Encoder_Layer_"+str(ind),dropout=dropout)
             self.encode_layers.append(layer_encoder)
             prev_enc_layer = layer_encoder.layer
@@ -169,10 +169,9 @@ class DeepOmicModel:
             for layer in self.decode_layers:
                 cur_data = layer.reverse_transform(sess, cur_data)
 
-
             return cur_data
 
 
 if __name__ == '__main__':
-    dom = DeepOmicModel(0.01)
+    dom = DeepOmicModel(0.001)
     dom.train()

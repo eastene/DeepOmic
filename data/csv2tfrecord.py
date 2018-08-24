@@ -55,6 +55,7 @@ for f in csv_files:
                         feature={
                             'X': tf.train.Feature(float_list=tf.train.FloatList(value=X)),
                             'Y': tf.train.Feature(float_list=tf.train.FloatList(value=soma.iloc[i, :])),
+                            # TODO change to ByteList for efficiency
                             'C': tf.train.Feature(int64_list=tf.train.Int64List(value=corrupted_inds))
                         }
                     )

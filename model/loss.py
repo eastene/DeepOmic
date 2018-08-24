@@ -14,7 +14,7 @@ from model.flags import FLAGS
 def squared_emphasized_loss(labels,
                             predictions,
                             corrupted_inds=None,
-                            axis=1,
+                            axis=0,
                             alpha=0.3,
                             beta=0.7):
     """
@@ -33,15 +33,15 @@ def squared_emphasized_loss(labels,
 
     num_elems = labels.shape[axis].value * FLAGS.batch_size
 
-    # if training on examples with corrupted indices
-    if corrupted_inds is not None:
-        # corrupted features
-        x_c = tf.boolean_mask(labels, corrupted_inds)
-        z_c = tf.boolean_mask(predictions, corrupted_inds)
-        # uncorrupted features
-        x = tf.boolean_mask(labels, ~corrupted_inds)
-        z = tf.boolean_mask(predictions, ~corrupted_inds)
+    # corrupted features
+    x_c = tf.boolean_mask(labels, corrupted_inds)
+    z_c = tf.boolean_mask(predictions, corrupted_inds)
+    # uncorrupted features
+    x = tf.boolean_mask(labels, ~corrupted_inds)
+    z = tf.boolean_mask(predictions, ~corrupted_inds)
 
+    # if training on examples with corrupted indices
+    if x_c is not None:
         lhs = alpha * tf.reduce_sum(tf.square(tf.subtract(x_c, z_c)))
         rhs = beta * tf.reduce_sum(tf.square(tf.subtract(x, z)))
 
@@ -56,7 +56,7 @@ def squared_emphasized_loss(labels,
 def cross_entropy_emphasized_loss(labels,
                                   predictions,
                                   corrupted_inds,
-                                  axis,
+                                  axis=0,
                                   alpha=0.3,
                                   beta=0.7):
     """
@@ -75,17 +75,15 @@ def cross_entropy_emphasized_loss(labels,
 
     num_elems = labels.shape[axis].value * FLAGS.batch_size
 
-    if FLAGS.corrupt_indices is not []:
-        corrupted_inds = FLAGS.corrupt_indices
-        indexes = np.zeros((labels.shape[axis].value), dtype=np.bool)
-        indexes[corrupted_inds] = 1
-        # corrupted features
-        x_c = tf.boolean_mask(labels, indexes)
-        z_c = tf.boolean_mask(predictions, indexes)
-        # uncorrupted features
-        x = tf.boolean_mask(labels, ~indexes)
-        z = tf.boolean_mask(predictions, ~indexes)
+    # corrupted features
+    x_c = tf.boolean_mask(labels, corrupted_inds)
+    z_c = tf.boolean_mask(predictions, corrupted_inds)
+    # uncorrupted features
+    x = tf.boolean_mask(labels, ~corrupted_inds)
+    z = tf.boolean_mask(predictions, ~corrupted_inds)
 
+    # if training on examples with corrupted indices
+    if x_c is not None:
         lhs = alpha * (-tf.reduce_sum(tf.add(tf.multiply(x_c, tf.log(z_c)),
                                              tf.multiply(1.0 - x_c, tf.log(1.0 - z_c)))))
         rhs = beta * (-tf.reduce_sum(tf.add(tf.multiply(x, tf.log(z)),
