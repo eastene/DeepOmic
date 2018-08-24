@@ -13,8 +13,8 @@ from model.flags import FLAGS
 
 def squared_emphasized_loss(labels,
                             predictions,
-                            axis,
                             corrupted_inds=None,
+                            axis=1,
                             alpha=0.3,
                             beta=0.7):
     """
@@ -22,7 +22,7 @@ def squared_emphasized_loss(labels,
     corrupted along certain dimensions
     :param labels: tensor of training example with no corruption added
     :param predictions: output tensor of autoencoder
-    :param corrupted_inds: indices of corrupted dimensions (if no dimensions are corrupt, leave as None)
+    :param corrupted_inds: indices of corrupted dimensions (if any)
     :param axis: axis along which components are taken
     :param alpha: weight for error on components that were corrupted
     :param beta: weight for error on components that were not corrupted
@@ -35,13 +35,16 @@ def squared_emphasized_loss(labels,
 
     # if training on examples with corrupted indices
     if corrupted_inds is not None:
-        x_c = tf.gather(labels, corrupted_inds, axis=axis)
-        z_c = tf.gather(predictions, corrupted_inds, axis=axis)
-        uncorrupted_inds = np.delete(np.arange(labels.shape[axis].value), corrupted_inds)
-        x = tf.gather(labels, uncorrupted_inds, axis=axis)
-        z = tf.gather(predictions, uncorrupted_inds, axis=axis)
+        # corrupted features
+        x_c = tf.boolean_mask(labels, corrupted_inds)
+        z_c = tf.boolean_mask(predictions, corrupted_inds)
+        # uncorrupted features
+        x = tf.boolean_mask(labels, ~corrupted_inds)
+        z = tf.boolean_mask(predictions, ~corrupted_inds)
+
         lhs = alpha * tf.reduce_sum(tf.square(tf.subtract(x_c, z_c)))
         rhs = beta * tf.reduce_sum(tf.square(tf.subtract(x, z)))
+
     # if training on uncorrupted examples, no need to select indices and alpha effectively 0
     else:
         lhs = 0.0
@@ -70,13 +73,26 @@ def cross_entropy_emphasized_loss(labels,
     assert (labels.shape[axis] == predictions.shape[axis])
     assert (labels.dtype == predictions.dtype)
 
-    uncorrupted_inds = np.delete(np.arange(labels.shape[axis].value), corrupted_inds)
-    x_c = tf.gather(labels, corrupted_inds, axis=axis)
-    z_c = tf.gather(predictions, corrupted_inds, axis=axis)
-    x = tf.gather(labels, uncorrupted_inds, axis=axis)
-    z = tf.gather(predictions, uncorrupted_inds, axis=axis)
+    num_elems = labels.shape[axis].value * FLAGS.batch_size
 
-    return tf.add(alpha * (-tf.reduce_sum(tf.add(tf.multiply(x_c, tf.log(z_c)),
-                                             tf.multiply(1.0 - x_c, tf.log(1.0 - z_c))))),
-                  beta * (-tf.reduce_sum(tf.add(tf.multiply(x, tf.log(z)),
-                                             tf.multiply(1.0 - x, tf.log(1.0 - z))))))
+    if FLAGS.corrupt_indices is not []:
+        corrupted_inds = FLAGS.corrupt_indices
+        indexes = np.zeros((labels.shape[axis].value), dtype=np.bool)
+        indexes[corrupted_inds] = 1
+        # corrupted features
+        x_c = tf.boolean_mask(labels, indexes)
+        z_c = tf.boolean_mask(predictions, indexes)
+        # uncorrupted features
+        x = tf.boolean_mask(labels, ~indexes)
+        z = tf.boolean_mask(predictions, ~indexes)
+
+        lhs = alpha * (-tf.reduce_sum(tf.add(tf.multiply(x_c, tf.log(z_c)),
+                                             tf.multiply(1.0 - x_c, tf.log(1.0 - z_c)))))
+        rhs = beta * (-tf.reduce_sum(tf.add(tf.multiply(x, tf.log(z)),
+                                             tf.multiply(1.0 - x, tf.log(1.0 - z)))))
+    else:
+        lhs = 0
+        rhs = -tf.reduce_sum(tf.add(tf.multiply(labels, tf.log(predictions)),
+                                             tf.multiply(1.0 - labels, tf.log(1.0 - predictions))))
+
+    return tf.add(lhs, rhs) / num_elems

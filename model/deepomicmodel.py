@@ -19,6 +19,7 @@ class DeepOmicModel:
         self.next_eval_elem = self.dataset.next_eval_elem()
 
         self.input = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
+        self.corrupt_mask = tf.placeholder(dtype=tf.bool, shape=[None, 1317])
         self.expected = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
 
         """
@@ -35,8 +36,9 @@ class DeepOmicModel:
         self.learning_rate = learning_rate
         print(str(self.input.shape) + "  " + str(self.decode_layers[-1].layer.shape))
         self.predictions = self.decode_layers[-1].layer
+        # TODO: get corrupted indices to work correctly
         self.loss = squared_emphasized_loss(labels=self.expected, predictions=self.decode_layers[-1].layer,
-                                            corrupted_inds=None, axis=1, alpha=0, beta=1)
+                                            corrupted_inds=self.corrupt_mask, axis=1, alpha=0, beta=1)
         self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.train.get_global_step())
 
@@ -72,17 +74,17 @@ class DeepOmicModel:
             self.decode_layers.append(layer_decoder)
             prev_dec_layer = layer_decoder
 
-
     def run_epoch(self, sess):
         c_tot = 0
         n_batches = 0
         sess.run(self.dataset.initialize_train())
         try:
             while True:
-                x, y = sess.run(self.next_train_elem)
+                x, cm, y = sess.run(self.next_train_elem)
                 # train on X, and corruptions of X
-                feed_dict={
+                feed_dict = {
                     self.input: x,
+                    self.corrupt_mask: cm,
                     self.expected: y
                 }
                 _, c, dl = sess.run([self.train_op, self.loss, self.decode_layers[-1].layer], feed_dict=feed_dict)
@@ -94,7 +96,6 @@ class DeepOmicModel:
 
     def train(self):
         with tf.Session() as sess:
-
             self.writer = tf.summary.FileWriter('.')
             self.writer.add_graph(tf.get_default_graph())
             #TODO remove after debugging
@@ -121,10 +122,11 @@ class DeepOmicModel:
 
             try:
                 while True:
-                    x, y = sess.run(self.next_eval_elem)
+                    x, cm, y = sess.run(self.next_eval_elem)
                     # train on X, and corruptions of X
                     feed_dict = {
                         self.input: x,
+                        self.corrupt_mask: cm,
                         self.expected: y
                     }
                     m = sess.run([self.eval_op], feed_dict=feed_dict)

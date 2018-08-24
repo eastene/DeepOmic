@@ -34,12 +34,13 @@ class InputPipeline:
         # format of each training example
         example_fmt = {
             "X": tf.FixedLenFeature((1317,), tf.float32),  # 1317 = number of SOMA attributes
-            "Y": tf.FixedLenFeature((1317,), tf.float32)  # 1317 = number of SOMA attributes
+            "Y": tf.FixedLenFeature((1317,), tf.float32),  # 1317 = number of SOMA attributes
+            "C": tf.FixedLenFeature((1317,), tf.int64)
         }
 
         parsed = tf.parse_single_example(example, example_fmt)
 
-        return parsed['X'], parsed['Y']
+        return parsed['X'], parsed['C'], parsed['Y']
 
     def input_fn(self):
         print("Looking for data files matching: {}\nIn: {}".format(self.file_pattern, self.data_dir))

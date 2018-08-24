@@ -12,7 +12,7 @@ DATA_DIR = '/home/evan/PycharmProjects/DeepOmic/data/'
 FILE_PATTERN = DATA_DIR + '*.csv'
 
 NUM_CORRUPT_EXAMPLES=3
-CORRUPTION_PR=0.01
+CORRUPTION_PR=0.01  # percent of dimensions to corrupt
 CORRUPTION_STR=1
 SEED=None
 
@@ -21,13 +21,11 @@ random.seed(SEED)
 
 def corrupt_random_dimensions(X, skip):
     if skip:
-        return X
+        return X, np.random.binomial(n=1, p=0, size=X.shape[0]) == 1
 
-    return np.apply_along_axis(
-        lambda x: x + (0 if random.random() < CORRUPTION_PR else random.uniform(0, 1 * CORRUPTION_STR)),
-        axis=0,
-        arr=X
-    )
+    corrupt = np.random.binomial(n=1, p=CORRUPTION_PR, size=X.shape[0]) == 1
+    X[corrupt] = X[corrupt] + random.uniform(0, 1 * CORRUPTION_STR)
+    return X, corrupt
 
 
 csv_files = glob(FILE_PATTERN)
@@ -49,13 +47,15 @@ for f in csv_files:
 
         for i in range(soma.shape[0]):
             for j in range(NUM_CORRUPT_EXAMPLES + 1):  # do not corrupt on first loop
+
+                X, corrupted_inds = corrupt_random_dimensions(soma.iloc[i, :], skip=j == 0)
+
                 example = tf.train.Example(
                     features=tf.train.Features(
                         feature={
-                            'X': tf.train.Feature(float_list=tf.train.FloatList(
-                                value=corrupt_random_dimensions(soma.iloc[i, :], skip=j == 0))
-                            ),
-                            'Y': tf.train.Feature(float_list=tf.train.FloatList(value=soma.iloc[i, :]))
+                            'X': tf.train.Feature(float_list=tf.train.FloatList(value=X)),
+                            'Y': tf.train.Feature(float_list=tf.train.FloatList(value=soma.iloc[i, :])),
+                            'C': tf.train.Feature(int64_list=tf.train.Int64List(value=corrupted_inds))
                         }
                     )
                 )
