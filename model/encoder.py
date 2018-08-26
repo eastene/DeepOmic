@@ -1,14 +1,13 @@
 import tensorflow as tf
 
 class Encoder:
-    def __init__(self, input, output_shape, name = None, dropout=False):
-        self.input = input
-        #self.input = tf.placeholder(tf.float32, shape=[None, input_shape])
-        if dropout == True:
-            self.d_layer = tf.layers.dense(self.input, output_shape,name=name,activation=tf.nn.sigmoid)
-            self.layer = tf.layers.dropout(self.d_layer)
-        else:
-            self.layer = tf.layers.dense(self.input, output_shape,name=name, activation=tf.nn.sigmoid)
+    def __init__(self, output_shape, name = None):
+        """ Initialize the layer with an output shape, and an optional name. """
+        self.layer = tf.layers.Dense(output_shape, name=name, activation=tf.nn.sigmoid)
+
+    def __call__(self, input):
+        """ Wrapper around self.layer.call(input) for simplicity. """
+        return self.layer(input)
 
     def transform(self, sess, input):
         """
