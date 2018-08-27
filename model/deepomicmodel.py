@@ -36,7 +36,7 @@ class DeepOmicModel:
         self.encoder_prefix = "Encoder_Layer_"
         self.decoder_prefix = "Decoder_Layer_"
 
-        self._initialize_layers(1317, [1000])
+        self._initialize_layers(1317, [1000,500,250])
 
 
 
@@ -44,6 +44,7 @@ class DeepOmicModel:
         TRAIN
         """
         self.learning_rate = learning_rate
+        #self.loss = tf.losses.mean_squared_error
         self.loss = tf.losses.mean_squared_error
         self.optimizer = tf.train.AdamOptimizer
 
@@ -108,7 +109,7 @@ class DeepOmicModel:
         """
 
         # Output starts as the placeholder variable for the data.
-        output = self.input
+        output = self.masking
 
         # Set maximum if none specified
         if max_lvl is None:
@@ -148,45 +149,45 @@ class DeepOmicModel:
             #  dec_0(dec_1(enc_1(enc_0(data)))
             # with enc_0 and dec_0's weights being held constant, etc
             num_layers = len(self.encode_layers)
-            for i in range(num_layers):
+            for i in range(start_layer,num_layers):
                 print("Training layer %d out of %d" % (i+1, num_layers))
 
+                # Build the network stack for this depth.
                 network = self.make_stack(i)
-                #loss = squared_emphasized_loss(labels=self.input,predictions=network,corrupted_inds=None, axis=1, alpha=0, beta=1)
-                loss = self.get_loss_func(self.input,network)
-
-                optimizer = self.get_optimizer()
 
                 # Retrieve the prefix names of the encoder and decoder at this level
                 encoder_pref,decoder_pref = self.get_enc_dec_name(i)
 
+                # Get the loss function specified and pass it the "clean" input
+                loss = self.get_loss_func(self.input,network)
 
+                # Get the specified optimizer.
+                optimizer = self.get_optimizer()
+
+                # Get the variables that will be trained by the optimizer (this should be only the variables for
+                # this level's encoder and decoder
                 train_vars = [var for var in tf.global_variables() if var.name.startswith(encoder_pref)
                               or var.name.startswith(decoder_pref)]
 
-                # Make a saver to save only the training variables
-
+                #  Tell optimizer to minimize only the variables at this level.
                 train_op=optimizer.minimize(loss,var_list=train_vars)
-                train_vars_with_opt = [var for var in tf.global_variables() if var.name.startswith(encoder_pref)
-                              or var.name.startswith(decoder_pref)]
-                self.layer_savers.append(tf.train.Saver(train_vars_with_opt))
-                init_vars = list(optimizer._get_beta_accumulators())
+
+                # Run initializer operation. Only initialize variables from the current layer.
+                sess.run(tf.global_variables_initializer())
+
+                # Create a new layer saver for this layer.
+                self.layer_savers.append(tf.train.Saver(train_vars,name="Level_"+str(i)+"_Saver"))
 
                 # If possible, restore the variables from a checkpoint at this level.
                 if tf.train.checkpoint_exists(FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i)):
                     print("Restoring layer " + str(i) + " from checkpoint.")
                     self.layer_savers[i].restore(sess,FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i))
-                # Otherwise, add them to the list of variables we initialize before running.
                 else:
                     print("No previous checkpoint found for layer " + str(i) + ", layer will be initialized.")
-                    init_vars += [var for var in tf.global_variables() if var.name.startswith(encoder_pref)
-                              or var.name.startswith(decoder_pref)]
 
-                # Initializer operation.
-                #init_op = tf.global_variables_initializer()
-                # Run initializer operation. Only initialize variables from the current layer.
-                sess.run(tf.variables_initializer(init_vars))
                 # Iterate through FLAGS.num_epochs epochs for each layer of training.
+                writer = tf.summary.FileWriter(".")
+                writer.add_graph(tf.get_default_graph())
                 for epoch in range(FLAGS.num_epochs):
                     # Run the epoch
                     c, n_batches = self.run_epoch(sess,train_op,loss)
@@ -246,5 +247,5 @@ class DeepOmicModel:
 
 
 if __name__ == '__main__':
-    dom = DeepOmicModel(0.001)
+    dom = DeepOmicModel(0.0001)
     dom.train_in_layers()
