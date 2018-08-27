@@ -97,6 +97,38 @@ class DeepOmicModel:
 
         except tf.errors.OutOfRangeError:
             return c_tot, n_batches  # end of data set reached, proceed to next epoch
+    def train_in_layers(self):
+        with tf.Session() as sess:
+            # Train each layer separately.
+            # First layer trains:
+            #  dec_0(enc_0(data))
+            #
+            # Second layer trains:
+            #  dec_1(enc_1(enc_0(data))
+            # with enc_0's weights being held constant (not trained), etc
+            num_layers = len(self.encode_layers)
+            for i in range(1):
+                print("Training layer %d out of %d" % (i+1, num_layers))
+
+                network = self.make_stack(i)
+                loss = squared_emphasized_loss(labels=self.input,predictions=network,
+                                               corrupted_inds=None, axis=1, alpha=0, beta=1)
+                optimizer = tf.train.AdamOptimizer(self.learning_rate)
+
+                # Get the highest level decoder and encoder variables, because these are the only ones we want to train.
+
+                train_vars = [var for var in tf.global_variables() if var.name.startswith("Encoder_Layer_" + str(i))
+                              or var.name.startswith("Decoder_Layer_" + str(i))]
+
+                train_op=optimizer.minimize(loss,var_list=train_vars)
+                init_op = tf.global_variables_initializer()
+                saver = tf.train.Saver(var_list=train_vars)
+                sess.run(init_op)
+                for epoch in range(FLAGS.num_epochs):
+
+                    self.run_epoch(sess,train_op,loss)
+                    print("Epoch done.")
+
 
     def train_full(self):
         """Trains all layers of the Autoencoder Stack at once."""
@@ -145,40 +177,6 @@ class DeepOmicModel:
                 pass
 
             print("Training Accuracy: {}".format(m_tot / n_batches))
-
-    def transform(self, X):
-        # Oper TF Session
-        with tf.Session() as sess:
-            if tf.train.checkpoint_exists(FLAGS.checkpoint_dir):
-                self.saver.restore(sess, FLAGS.checkpoint_dir)
-                print("Model loaded.")
-            else:
-                print("No existing encoder found.")
-                exit(1)
-
-            #X_new = sess.run(self.encode_layers[], {self.input: X})
-            cur_data = X
-            for layer in self.encode_layers:
-                cur_data = layer.transform(sess,cur_data)
-
-            return cur_data
-
-    def reverse_transform(self, X):
-
-        with tf.Session() as sess:
-            if tf.train.checkpoint_exists(FLAGS.checkpoint_dir):
-                self.saver.restore(sess, FLAGS.checkpoint_dir)
-                print("Model loaded.")
-            else:
-                print("No existing decoder found.")
-                exit(1)
-
-            cur_data = X
-            for layer in self.decode_layers:
-                cur_data = layer.reverse_transform(sess, cur_data)
-
-
-            return cur_data
 
 
 if __name__ == '__main__':
