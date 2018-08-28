@@ -3,7 +3,7 @@ import tensorflow as tf
 class Encoder:
     def __init__(self, output_shape, name = None):
         """ Initialize the layer with an output shape, and an optional name. """
-        self.layer = tf.layers.Dense(output_shape, name=name, activation=tf.nn.sigmoid)
+        self.layer = tf.layers.Dense(output_shape, name=name, activation=tf.nn.leaky_relu)
 
     def __call__(self, input):
         """ Wrapper around self.layer.call(input) for simplicity. """

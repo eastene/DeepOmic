@@ -19,7 +19,7 @@ class DeepOmicModel:
         self.next_train_elem = self.dataset.next_train_elem()
         self.next_eval_elem = self.dataset.next_eval_elem()
         self.input = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
-        self.masking = tf.layers.dropout(self.input,rate=0.2)
+        self.masking = tf.layers.dropout(self.input,rate=0.05)
 
         """
         MODEL
@@ -36,7 +36,7 @@ class DeepOmicModel:
         self.encoder_prefix = "Encoder_Layer_"
         self.decoder_prefix = "Decoder_Layer_"
 
-        self._initialize_layers(1317, [1000,500,250])
+        self._initialize_layers(1317, [1317, 250])
 
 
 
@@ -44,8 +44,8 @@ class DeepOmicModel:
         TRAIN
         """
         self.learning_rate = learning_rate
-        #self.loss = tf.losses.mean_squared_error
         self.loss = tf.losses.mean_squared_error
+        #self.loss = tf.losses.sigmoid_cross_entropy
         self.optimizer = tf.train.AdamOptimizer
 
 
@@ -193,11 +193,30 @@ class DeepOmicModel:
                     c, n_batches = self.run_epoch(sess,train_op,loss)
                     # Save the result in a checkpoint directory with the layer name.
                     self.layer_savers[i].save(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i))
-                    print("\rLoss: {:.3f}".format(c/n_batches) + " at Epoch " + str(epoch))
+
+                    print("\rLoss: {:.3f}".format(c/n_batches) + " Test Set Loss: {:.3f}".format(self.get_test_acc(sess,network)) + " at Epoch " + str(epoch),end="")
+                print("\n")
 
 
 
-    def train_full(self):
+    def get_test_acc(self, sess, network):
+        # evaluate
+        m_tot = 0
+        n_batches = 0
+        sess.run(self.dataset.initialize_eval())
+        self.distance = tf.square(tf.subtract(self.input, network))
+        self.eval_op = tf.reduce_mean(self.distance)
+        try:
+            while True:
+                feed_dict = {self.input: sess.run(self.next_eval_elem)}
+                m = sess.run([self.eval_op], feed_dict=feed_dict)
+                m_tot += m[0]
+                n_batches += 1
+        except tf.errors.OutOfRangeError:
+            pass
+        return m_tot/n_batches
+
+    def train(self):
         """Trains all layers of the Autoencoder Stack at once."""
         with tf.Session() as sess:
 
@@ -227,25 +246,10 @@ class DeepOmicModel:
                 save_path = saver.save(sess, FLAGS.checkpoint_dir)
                 print("Model saved in path: %s" % save_path)
 
-            # evaluate
-            m_tot = 0
-            n_batches = 0
-            sess.run(self.dataset.initialize_eval())
-            self.distance = tf.square(tf.subtract(self.input, network))
-            self.eval_op = tf.reduce_sum(self.distance)
-            try:
-                while True:
-                    feed_dict = {self.input: sess.run(self.next_eval_elem)}
-                    m = sess.run([self.eval_op], feed_dict=feed_dict)
-                    m_tot += m[0]
-                    n_batches += 1
-
-            except tf.errors.OutOfRangeError:
-                pass
-
-            print("Training Accuracy: {}".format(m_tot / n_batches))
+            test_acc = self.get_test_acc(sess,network=network)
+            print("Training Accuracy: {}".format(test_acc))
 
 
 if __name__ == '__main__':
     dom = DeepOmicModel(0.0001)
-    dom.train_in_layers()
+    dom.train()
