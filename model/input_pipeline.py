@@ -6,6 +6,7 @@
 
 import tensorflow as tf
 from os import path
+import random
 
 from model.flags import FLAGS
 
@@ -17,24 +18,29 @@ class InputPipeline:
         Input pipeline based on the Tensorflow Dataset API
         :param file_pattern: regex pattern of files to include as input (.tfrecord)
         :param size_of_split: number of batches to hold for evaluation
+        :param num_corrupt_examples: number of corrupted examples to produce for each example read
+        :param corruption_pr: probability of corruption occuring for each dimension values between (0-1)
+        :param corruption_str: strength of corruption, multiplies corruption value applied to corrupt dimensions
+        :param seed: seed value for corruption value, default uses system time
         """
         self.data_dir = FLAGS.data_dir
         self.file_pattern = file_pattern
         self.search_pattern = path.join(self.data_dir, self.file_pattern)
         self.dataset = self.input_fn()
-        self.eval_iter = self.dataset.take(size_of_split).make_initializable_iterator()
-        self.train_iter = self.dataset.skip(size_of_split).make_initializable_iterator()
+        self.eval_iter = self.dataset.take(size_of_split).cache().make_initializable_iterator()
+        self.train_iter = self.dataset.skip(size_of_split).cache().make_initializable_iterator()
 
     def omic_data_parse_fn(self, example):
         # format of each training example
         example_fmt = {
-            "X": tf.FixedLenFeature((1317,), tf.float32)  # 1317 = number of SOMA attributes
+            "X": tf.FixedLenFeature((1317,), tf.float32),  # 1317 = number of SOMA attributes
+            "Y": tf.FixedLenFeature((1317,), tf.float32),  # 1317 = number of SOMA attributes
+            "C": tf.FixedLenFeature((1317,), tf.int64)
         }
 
-        # TODO: add corruption function to mapper
-
         parsed = tf.parse_single_example(example, example_fmt)
-        return parsed['X']
+
+        return parsed['X'], parsed['C'], parsed['Y']
 
     def input_fn(self):
         print("Looking for data files matching: {}\nIn: {}".format(self.file_pattern, self.data_dir))
@@ -47,7 +53,7 @@ class InputPipeline:
             )
         )
 
-        dataset = dataset.cache()
+        #dataset = dataset.cache()
 
         # shuffle data
         dataset.shuffle(buffer_size=FLAGS.shuffle_buffer_size)

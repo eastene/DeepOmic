@@ -18,5 +18,5 @@ tf.flags.DEFINE_integer("num_epochs", 100, "number of epochs for training")
 tf.flags.DEFINE_string("data_dir", "", "directory in which input data is located")
 tf.flags.DEFINE_string("checkpoint_dir", path.join(path.dirname(path.realpath(__file__)), "tmp", ""),
                        "directory in which to save model checkpoints (by default creates a tmp directory in this file's directory")
-
+tf.flags.DEFINE_list("corrupt_indices", [], "indexes to corrupt with random value")
 FLAGS = tf.flags.FLAGS
