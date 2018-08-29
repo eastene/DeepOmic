@@ -39,7 +39,7 @@ class DeepOmicModel:
         self.encoder_prefix = "Encoder_Layer_"
         self.decoder_prefix = "Decoder_Layer_"
 
-        self._initialize_layers(1317, [500])
+        self._initialize_layers(1317, [1317])
 
 
 
@@ -85,7 +85,7 @@ class DeepOmicModel:
             # For encoders, output size is the current element of layer list.
             # For decoders, output size is equal to the *input* size of the Encoder at this layer.
             # because Decoder(Encoder(data)) == data
-            self.encode_layers.append(Encoder(layer_size, name="Encoder_Layer_" + str(ind)))
+            self.encode_layers.append(Encoder(layer_size,name="Encoder_Layer_"+str(ind)))
             self.decode_layers.append(Decoder(prev_output_size, name="Decoder_Layer_" + str(ind)))
 
             self.layer_sizes.append((prev_output_size,layer_size))
@@ -122,7 +122,7 @@ class DeepOmicModel:
 
         # Decode step
         for i in reversed(range(max_lvl+1)):
-            output = self.decode_layers[i](output)
+            output = self.decode_layers[i](output,self.encode_layers[i].kernel)
 
         return output
 
@@ -191,8 +191,6 @@ class DeepOmicModel:
 
                 # Create a new layer saver for this layer.
                 self.layer_savers.append(tf.train.Saver(train_vars,name="Level_"+str(i)+"_Saver"))
-                test = tf.global_variables()
-
 
                 # If possible, restore the variables from a checkpoint at this level.
                 for j in range(i+1):
@@ -270,4 +268,4 @@ class DeepOmicModel:
 
 if __name__ == '__main__':
     dom = DeepOmicModel(0.0001)
-    dom.train_in_layers()
+    dom.train_in_layers(start_layer=0)
