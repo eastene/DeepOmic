@@ -20,7 +20,7 @@ class DeepOmicModel:
         self.next_eval_elem = self.dataset.next_eval_elem()
 
         self.input = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
-        self.masking = tf.layers.dropout(self.input,rate=0.05)
+        #self.masking = tf.layers.dropout(self.input,rate=0.05)
         self.corrupt_mask = tf.placeholder(dtype=tf.bool, shape=[None, 1317])
         self.expected = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
 
@@ -39,7 +39,7 @@ class DeepOmicModel:
         self.encoder_prefix = "Encoder_Layer_"
         self.decoder_prefix = "Decoder_Layer_"
 
-        self._initialize_layers(1317, [1317])
+        self._initialize_layers(1317, [2000])
 
 
 
@@ -110,7 +110,7 @@ class DeepOmicModel:
         """
 
         # Output starts as the placeholder variable for the data.
-        output = self.masking
+        output = self.input
 
         # Set maximum if none specified
         if max_lvl is None:
@@ -209,23 +209,25 @@ class DeepOmicModel:
                     c, n_batches = self.run_epoch(sess,train_op,loss)
                     # Save the result in a checkpoint directory with the layer name.
                     self.layer_savers[i].save(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i))
-                    ts_loss = self.get_test_acc(sess,network)
+                    ts_loss = self.get_test_acc(sess,loss)
                     print("\rLoss: {:.3f}".format(c/n_batches) + " Test Set Loss: {:.3f}".format(ts_loss) + " at Epoch " + str(epoch),end="")
                 print("\n")
 
-    def get_test_acc(self, sess, network):
+    def get_test_acc(self, sess, loss):
         # evaluate
         m_tot = 0
         n_batches = 0
         sess.run(self.dataset.initialize_eval())
-        self.distance = tf.square(tf.subtract(self.input, network))
-        self.eval_op = tf.reduce_mean(self.distance)
+        #self.distance = tf.square(tf.subtract(self.input, network))
+        #self.eval_op = tf.reduce_mean(self.distance)
         while True:
             try:
                 # train on X, and corruptions of X
                 x, cm, y = sess.run(self.next_eval_elem)
-                feed_dict = {self.input: x}
-                m = sess.run([self.eval_op], feed_dict=feed_dict)
+                feed_dict = {self.input: x,
+                             self.corrupt_mask: cm,
+                             self.expected: y}
+                m = sess.run([loss], feed_dict=feed_dict)
                 m_tot += m[0]
                 n_batches += 1
             except tf.errors.OutOfRangeError:
@@ -263,9 +265,22 @@ class DeepOmicModel:
                 test_acc = self.get_test_acc(sess, network=network)
                 print("Training Accuracy: {}".format(test_acc))
 
+    def predict(self, input):
+        with tf.Session() as sess:
+            network = self.make_stack()
+            sess.run(tf.global_variables_initializer())
+            num_layers = len(self.encode_layers)
+            # Check if saver layers exist yet. If not, create them.
+            layer_saver = tf.train.Saver()
+            for i in range(num_layers):
+                if tf.train.checkpoint_exists(FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i)):
+                    print("Restoring Layer %d" % i)
+                    layer_saver.restore(sess,FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i))
 
+            # Run prediction using loaded model
+            sess.run([network],feed_dict={self.input : input})
 
 
 if __name__ == '__main__':
-    dom = DeepOmicModel(0.0001)
-    dom.train_in_layers(start_layer=0)
+    dom = DeepOmicModel(0.00001)
+    dom.train_in_layers()
