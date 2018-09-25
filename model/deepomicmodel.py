@@ -39,7 +39,7 @@ class DeepOmicModel:
         self.encoder_prefix = "Encoder_Layer_"
         self.decoder_prefix = "Decoder_Layer_"
 
-        self._initialize_layers(1317, [500,100])
+        self._initialize_layers(1317, [2000])
 
 
 
@@ -106,6 +106,7 @@ class DeepOmicModel:
 
         Accepts:
         max_level - The maximum stack height [0,max_level]
+
         """
 
         # Output starts as the placeholder variable for the data.
@@ -140,6 +141,9 @@ class DeepOmicModel:
                     self.expected: y
                 }
                 # Run encode operation
+
+                # Overwrite weight matrix
+
                 _, c = sess.run([train_op, loss], feed_dict=feed_dict)
                 c_tot += c
                 n_batches += 1
@@ -158,7 +162,6 @@ class DeepOmicModel:
             #  dec_0(dec_1(enc_1(enc_0(data)))
             # with enc_0 and dec_0's weights being held constant, etc
             num_layers = len(self.encode_layers)
-            # Train layers individually
             for i in range(start_layer,num_layers):
                 print("Training layer %d out of %d" % (i+1, num_layers))
 
@@ -181,7 +184,7 @@ class DeepOmicModel:
                               or var.name.startswith(decoder_pref)]
 
                 #  Tell optimizer to minimize only the variables at this level.
-                self.train_op=optimizer.minimize(loss,var_list=train_vars)
+                train_op=optimizer.minimize(loss,var_list=train_vars)
 
                 # Run initializer operation. Only initialize variables from the current layer.
                 sess.run(tf.global_variables_initializer())
@@ -203,41 +206,12 @@ class DeepOmicModel:
                 writer.add_graph(tf.get_default_graph())
                 for epoch in range(FLAGS.num_epochs):
                     # Run the epoch
-                    c, n_batches = self.run_epoch(sess,self.train_op,loss)
+                    c, n_batches = self.run_epoch(sess,train_op,loss)
                     # Save the result in a checkpoint directory with the layer name.
                     self.layer_savers[i].save(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i))
                     ts_loss = self.get_test_acc(sess,loss)
                     print("\rLoss: {:.3f}".format(c/n_batches) + " Test Set Loss: {:.3f}".format(ts_loss) + " at Epoch " + str(epoch),end="")
                 print("\n")
-            # Train layers together
-            print("Training network in combination for %d epochs." % FLAGS.num_comb_epochs)
-            # Full depth network
-            network = self.make_stack()
-            # Optimize all variables at once
-            optimizer = self.get_optimizer()
-            # Get the loss function specified and pass it the "clean" input
-            loss = self.get_loss_func(labels=self.expected, predictions=network,
-                                      corrupted_inds=self.corrupt_mask, axis=1, alpha=0.4, beta=0.6)
-            # Initialize variables.
-            sess.run(tf.global_variables_initializer())
-            # Restore layers
-            for j in range(num_layers):
-                if tf.train.checkpoint_exists(FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j)):
-                    print("Restoring layer " + str(j) + " from checkpoint.")
-                    self.layer_savers[j].restore(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j))
-                else:
-                    print("ERROR: Layer %d not found." % j)
-            # Run for FLAGS.num_comb_epochs epochs
-            for i in range(FLAGS.num_comb_epochs):
-                c, n_batches = self.run_epoch(sess, self.train_op, loss)
-                #print("Saving %d layers.\n" % num_layers)
-                for j in range(num_layers):
-                    self.layer_savers[j].save(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j))
-                ts_loss = self.get_test_acc(sess, loss)
-                print("\rLoss: {:.3f}".format(c / n_batches) + " Test Set Loss: {:.3f}".format(ts_loss) + " at Epoch " + str(i),end="")
-
-
-
 
     def get_test_acc(self, sess, loss):
         # evaluate
@@ -288,7 +262,7 @@ class DeepOmicModel:
                 print("Epoch:", (epoch + 1), "cost =", "{:.3f}".format(c / n_batches))
                 save_path = saver.save(sess, FLAGS.checkpoint_dir)
                 print("Model saved in path: %s" % save_path)
-                test_acc = self.get_test_acc(sess)
+                test_acc = self.get_test_acc(sess, network=network)
                 print("Training Accuracy: {}".format(test_acc))
 
     def predict(self, input):
@@ -308,5 +282,5 @@ class DeepOmicModel:
 
 
 if __name__ == '__main__':
-    dom = DeepOmicModel(0.000001)
+    dom = DeepOmicModel(0.00001)
     dom.train_in_layers()
