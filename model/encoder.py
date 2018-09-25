@@ -12,8 +12,10 @@ class Encoder:
         """ Wrapper around self.layer.call(input) for simplicity. """
         with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
             self.activation = tf.nn.leaky_relu
+            #self.activation = lambda x : x
             self.kernel = tf.get_variable("kernel", [input.shape[1], self.output_shape], dtype=tf.float32)
             self.bias = tf.get_variable("bias",[self.output_shape], dtype=tf.float32)
-            self.output = self.activation(tf.matmul(input,self.kernel) + self.bias)
+            #self.output = self.activation(tf.matmul(input,self.kernel) + self.bias)
+            self.output = tf.matmul(input,self.kernel) + self.bias
         return self.output
         #return self.layer(input)

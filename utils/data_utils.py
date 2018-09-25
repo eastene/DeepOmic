@@ -50,7 +50,7 @@ def split_omics(df: pd.DataFrame,
             data_list.append(df.iloc[:, start:end] if split_cols 
                               else df.iloc[start:end, :])
             pos = pos + valid_types[data]
-            
+
     return data_list
 
 
