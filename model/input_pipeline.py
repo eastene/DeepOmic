@@ -27,8 +27,8 @@ class InputPipeline:
         self.file_pattern = file_pattern
         self.search_pattern = path.join(self.data_dir, self.file_pattern)
         self.dataset = self.input_fn()
-        self.eval_iter = self.dataset.take(size_of_split).cache().make_initializable_iterator()
-        self.train_iter = self.dataset.skip(size_of_split).cache().make_initializable_iterator()
+        self.eval_iter = self.dataset.take(size_of_split).make_initializable_iterator()
+        self.train_iter = self.dataset.skip(size_of_split).make_initializable_iterator()
 
     def omic_data_parse_fn(self, example):
         # format of each training example

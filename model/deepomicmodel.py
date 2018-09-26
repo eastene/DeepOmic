@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from model.flags import FLAGS
-from model.loss import squared_emphasized_loss
+from model.loss import *
 from model.input_pipeline import InputPipeline
 
 from model.decoder import Decoder
@@ -39,9 +39,7 @@ class DeepOmicModel:
         self.encoder_prefix = "Encoder_Layer_"
         self.decoder_prefix = "Decoder_Layer_"
 
-        self._initialize_layers(1317, [500,100])
-
-
+        self._initialize_layers(1317, [1000, 500, 100, 50])
 
         """
         TRAIN
@@ -50,7 +48,7 @@ class DeepOmicModel:
 
         # TODO: get corrupted indices to work correctly
 
-        self.loss = squared_emphasized_loss
+        self.loss = squared_emphasized_sparse_loss
         self.optimizer = tf.train.AdamOptimizer
 
         """
@@ -64,12 +62,16 @@ class DeepOmicModel:
         """
         #self.init_op = tf.global_variables_initializer()
 
-    def get_loss_func(self, labels, predictions, corrupted_inds, axis, alpha, beta):
-        return self.loss(labels=labels, predictions=predictions,
-                                            corrupted_inds=corrupted_inds, axis=axis, alpha=alpha, beta=beta)
+    #def get_loss_func(self, labels, predictions, corrupted_inds, axis, alpha, beta):
+    #    return self.loss(labels=labels, predictions=predictions,
+    #                                       corrupted_inds=corrupted_inds, axis=axis, alpha=alpha, beta=beta)
 
-    def get_optimizer(self):
-        return self.optimizer(learning_rate=self.learning_rate)
+    def get_loss_func(self, labels, predictions, encoded, lam, corrupted_inds, axis, alpha, beta):
+        return self.loss(labels=labels, predictions=predictions, encoded=encoded,
+                                            corrupted_inds=corrupted_inds, lam=lam, axis=axis, alpha=alpha, beta=beta)
+
+    def get_optimizer(self, learning_rate):
+        return self.optimizer(learning_rate=learning_rate)
 
     def get_enc_dec_name(self, num):
         return (self.encoder_prefix + str(num), self.decoder_prefix + str(num))
@@ -159,21 +161,21 @@ class DeepOmicModel:
             # with enc_0 and dec_0's weights being held constant, etc
             num_layers = len(self.encode_layers)
             # Train layers individually
-            for i in range(start_layer,num_layers):
+            for i in range(start_layer, num_layers):
                 print("Training layer %d out of %d" % (i+1, num_layers))
 
                 # Build the network stack for this depth.
                 network = self.make_stack(i)
 
                 # Retrieve the prefix names of the encoder and decoder at this level
-                encoder_pref,decoder_pref = self.get_enc_dec_name(i)
+                encoder_pref, decoder_pref = self.get_enc_dec_name(i)
 
                 # Get the loss function specified and pass it the "clean" input
-                loss = self.get_loss_func(labels=self.expected,predictions=network,
-                                          corrupted_inds=self.corrupt_mask,axis=1,alpha=0.4,beta=0.6)
+                loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[i].output,
+                                          corrupted_inds=self.corrupt_mask, lam=FLAGS.sparsity_lambda, axis=1,alpha=0.4,beta=0.6)
 
                 # Get the specified optimizer.
-                optimizer = self.get_optimizer()
+                optimizer = self.get_optimizer(self.learning_rate)
 
                 # Get the variables that will be trained by the optimizer (this should be only the variables for
                 # this level's encoder and decoder
@@ -181,7 +183,7 @@ class DeepOmicModel:
                               or var.name.startswith(decoder_pref)]
 
                 #  Tell optimizer to minimize only the variables at this level.
-                self.train_op=optimizer.minimize(loss,var_list=train_vars)
+                self.train_op=optimizer.minimize(loss, var_list=train_vars)
 
                 # Run initializer operation. Only initialize variables from the current layer.
                 sess.run(tf.global_variables_initializer())
@@ -203,21 +205,22 @@ class DeepOmicModel:
                 writer.add_graph(tf.get_default_graph())
                 for epoch in range(FLAGS.num_epochs):
                     # Run the epoch
-                    c, n_batches = self.run_epoch(sess,self.train_op,loss)
+                    c, n_batches = self.run_epoch(sess, self.train_op, loss)
                     # Save the result in a checkpoint directory with the layer name.
                     self.layer_savers[i].save(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i))
                     ts_loss = self.get_test_acc(sess,loss)
                     print("\rLoss: {:.3f}".format(c/n_batches) + " Test Set Loss: {:.3f}".format(ts_loss) + " at Epoch " + str(epoch),end="")
                 print("\n")
+
             # Train layers together
             print("Training network in combination for %d epochs." % FLAGS.num_comb_epochs)
             # Full depth network
             network = self.make_stack()
             # Optimize all variables at once
-            optimizer = self.get_optimizer()
+            optimizer = self.get_optimizer(self.learning_rate / 100)
             # Get the loss function specified and pass it the "clean" input
-            loss = self.get_loss_func(labels=self.expected, predictions=network,
-                                      corrupted_inds=self.corrupt_mask, axis=1, alpha=0.4, beta=0.6)
+            loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[-1].output,
+                                    lam=FLAGS.sparsity_lambda, corrupted_inds=self.corrupt_mask, axis=1, alpha=0.4, beta=0.6)
             # Initialize variables.
             sess.run(tf.global_variables_initializer())
             # Restore layers
@@ -235,8 +238,6 @@ class DeepOmicModel:
                     self.layer_savers[j].save(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j))
                 ts_loss = self.get_test_acc(sess, loss)
                 print("\rLoss: {:.3f}".format(c / n_batches) + " Test Set Loss: {:.3f}".format(ts_loss) + " at Epoch " + str(i),end="")
-
-
 
 
     def get_test_acc(self, sess, loss):
@@ -306,7 +307,55 @@ class DeepOmicModel:
             # Run prediction using loaded model
             sess.run([network],feed_dict={self.input : input})
 
+    def plot_results(self):
+        from sklearn.decomposition import PCA
+        import matplotlib.pyplot as plt
+        data = np.empty((1,50))
+        with tf.Session() as sess:
+            # Restore layers
+            for j in range(len(self.encode_layers)):
+                if tf.train.checkpoint_exists(FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j)):
+                    print("Restoring layer " + str(j) + " from checkpoint.")
+                    self.layer_savers[j].restore(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j))
+                else:
+                    print("ERROR: Layer %d not found." % j)
+            sess.run(self.dataset.initialize_train())
+            while True:
+                try:
+                    x, cm, y = sess.run(self.next_train_elem)
+                    # train on X, and corruptions of X
+                    feed_dict = {
+                        self.input: x,
+                        self.corrupt_mask: cm,
+                        self.expected: y
+                    }
+                    # Run encode operation
+                    data = np.vstack((data, sess.run(self.encode_layers[-1].output, feed_dict=feed_dict)))
+                except tf.errors.OutOfRangeError:
+                    sess.run(self.dataset.initialize_eval())
+                    while True:
+                        try:
+
+                            x, cm, y = sess.run(self.next_eval_elem)
+                            # train on X, and corruptions of X
+                            feed_dict = {
+                                self.input: x,
+                                self.corrupt_mask: cm,
+                                self.expected: y
+                            }
+                            # Run encode operation
+                            data = np.vstack((data, sess.run(self.encode_layers[-1].output, feed_dict=feed_dict)))
+                        except tf.errors.OutOfRangeError:
+                            break
+                    break
+        pca = PCA(n_components=2)
+        xy = pca.fit_transform(data[1:, :])
+        plt.scatter(xy[:, 0], xy[:, 1])
+        plt.show()
+        np.savetxt("/home/evan/Desktop/autoencoder_out.csv", data[1:,:], delimiter=',')
+
 
 if __name__ == '__main__':
-    dom = DeepOmicModel(0.000001)
+    dom = DeepOmicModel(0.00001)
     dom.train_in_layers()
+    dom.plot_results()

@@ -11,7 +11,7 @@ from utils.data_utils import split_omics
 DATA_DIR = '/home/evan/PycharmProjects/DeepOmic/data/'
 FILE_PATTERN = DATA_DIR + '*.csv'
 
-NUM_CORRUPT_EXAMPLES=9
+NUM_CORRUPT_EXAMPLES=1
 CORRUPTION_PR=0.01  # percent of dimensions to corrupt
 CORRUPTION_STR=1
 SEED=None
@@ -35,14 +35,17 @@ for f in csv_files:
 
     data = pd.read_csv(f, low_memory=False)
 
-    clin, soma, metab = split_omics(data, types=["clinical", "soma", "metab"])
+    #clin, soma, metab = split_omics(data, types=["clinical", "soma", "metab"])
+
+    soma=data.iloc[:,1:]
 
     filename = ntpath.basename(f)
     base, ext = os.path.splitext(filename)
     print("Read in {} records".format(soma.shape[0]))
     print("Generating {} corrupt records per record read".format(NUM_CORRUPT_EXAMPLES))
 
-    print("Writing " + base + '.tfrecord of {} records'.format(soma.shape[0] * NUM_CORRUPT_EXAMPLES))
+    print("Writing " + base + '.tfrecord of {} records'.format(soma.shape[0] + (soma.shape[0] * NUM_CORRUPT_EXAMPLES)))
+    records = 0
     with tf.python_io.TFRecordWriter(base + '.tfrecord') as tfwriter:
 
         for i in range(soma.shape[0]):
@@ -62,3 +65,6 @@ for f in csv_files:
                 )
 
                 tfwriter.write(example.SerializeToString())
+                records += 1
+
+    print("{} records successfully writen".format(records))
