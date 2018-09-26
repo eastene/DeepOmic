@@ -94,3 +94,80 @@ def cross_entropy_emphasized_loss(labels,
                                              tf.multiply(1.0 - labels, tf.log(1.0 - predictions))))
 
     return tf.add(lhs, rhs) / num_elems
+
+
+def squared_emphasized_sparse_loss(labels,
+                            predictions,
+                            encoded,
+                            corrupted_inds=None,
+                            lam=0.01,
+                            axis=0,
+                            alpha=0.3,
+                            beta=0.7):
+    """
+        Compute squared loss over training examples that have been
+        corrupted along certain dimensions and impose sparsity constraint
+        :param labels: tensor of training example with no corruption added
+        :param predictions: output tensor of autoencoder
+        :param encoded: output tensor of encoder layer
+        :param corrupted_inds: indices of corrupted dimensions (if any)
+        :param lam: lambda penalty term for sparsity constraint (higher = more sparsity)
+        :param axis: axis along which components are taken
+        :param alpha: weight for error on components that were corrupted
+        :param beta: weight for error on components that were not corrupted
+        :return: squared loss, emphasized by corrupted component weight
+    """
+    assert (labels.shape[axis] == predictions.shape[axis])
+    assert (labels.dtype == predictions.dtype)
+
+    num_elems = labels.shape[axis].value * FLAGS.batch_size
+
+    # sparsity penalty, added to each sample
+    omega = lam * tf.reduce_sum(tf.abs(encoded))
+
+    # corrupted features
+    x_c = tf.boolean_mask(labels, corrupted_inds)
+    z_c = tf.boolean_mask(predictions, corrupted_inds)
+    # uncorrupted features
+    x = tf.boolean_mask(labels, ~corrupted_inds)
+    z = tf.boolean_mask(predictions, ~corrupted_inds)
+
+    # if training on examples with corrupted indices
+    if x_c is not None:
+        lhs = alpha * tf.reduce_sum(tf.square(tf.subtract(x_c, z_c)))
+        rhs = beta * tf.reduce_sum(tf.square(tf.subtract(x, z)))
+
+    # if training on uncorrupted examples, no need to select indices and alpha effectively 0
+    else:
+        lhs = 0.0
+        rhs = 1.0 * tf.reduce_sum(tf.square(tf.subtract(labels, predictions)))
+
+    return (tf.add(lhs, rhs) + omega) / num_elems
+
+
+def squared_sparse_loss(labels,
+                            predictions,
+                            encoded,
+                            lam=0.01,
+                            axis=0):
+    """
+        Compute squared loss over training examples and impose
+        sparsity constraint
+        :param labels: tensor of training example with no corruption added
+        :param predictions: output tensor of autoencoder
+        :param encoded: output tensor of encoder layer
+        :param lam: lambda penalty term for sparsity constraint (higher = more sparsity)
+        :param axis: axis along which components are taken
+        :return: squared loss
+    """
+    assert (labels.shape[axis] == predictions.shape[axis])
+    assert (labels.dtype == predictions.dtype)
+
+    num_elems = labels.shape[axis].value * FLAGS.batch_size
+
+    # sparsity penalty, added to each sample
+    omega = lam * tf.reduce_sum(tf.abs(encoded))
+
+    loss = tf.reduce_sum(tf.square(tf.subtract(labels, predictions))) + omega
+
+    return loss / num_elems
