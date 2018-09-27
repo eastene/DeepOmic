@@ -25,6 +25,14 @@ class DeepOmicModel:
         self.expected = tf.placeholder(dtype=tf.float32, shape=[None, 1317])
 
         """
+        HYPER PARAMETERS
+        """
+        self.alpha = FLAGS.emphasis_alpha
+        self.beta = FLAGS.emphasis_beta
+        self.lam = FLAGS.sparsity_lambda
+
+
+        """
         MODEL
         """
         # List of autoencoder layers
@@ -172,7 +180,7 @@ class DeepOmicModel:
 
                 # Get the loss function specified and pass it the "clean" input
                 loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[i].output,
-                                          corrupted_inds=self.corrupt_mask, lam=FLAGS.sparsity_lambda, axis=1,alpha=0.4,beta=0.6)
+                                          corrupted_inds=self.corrupt_mask, lam=self.lam, axis=1,alpha=self.alpha,beta=self.beta)
 
                 # Get the specified optimizer.
                 optimizer = self.get_optimizer(self.learning_rate)
@@ -220,7 +228,7 @@ class DeepOmicModel:
             optimizer = self.get_optimizer(self.learning_rate / 100)
             # Get the loss function specified and pass it the "clean" input
             loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[-1].output,
-                                    lam=FLAGS.sparsity_lambda, corrupted_inds=self.corrupt_mask, axis=1, alpha=0.4, beta=0.6)
+                                    lam=self.lam, corrupted_inds=self.corrupt_mask, axis=1, alpha=self.alpha, beta=self.beta)
             # Initialize variables.
             sess.run(tf.global_variables_initializer())
             # Restore layers

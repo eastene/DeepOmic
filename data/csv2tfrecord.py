@@ -12,7 +12,7 @@ DATA_DIR = '/home/evan/PycharmProjects/DeepOmic/data/'
 FILE_PATTERN = DATA_DIR + '*.csv'
 
 NUM_CORRUPT_EXAMPLES=1
-CORRUPTION_PR=0.01  # percent of dimensions to corrupt
+CORRUPTION_PR=0.1  # percent of dimensions to corrupt
 CORRUPTION_STR=1
 SEED=None
 
