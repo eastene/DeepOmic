@@ -7,7 +7,7 @@
 import tensorflow as tf
 from os import path
 
-tf.logging.set_verbosity(tf.logging.INFO)
+tf.logging.set_verbosity(tf.logging.ERROR)
 tf.flags.DEFINE_integer("num_parallel_readers", 8, "number of parallel I/O threads")
 tf.flags.DEFINE_integer("shuffle_buffer_size", 200, "size (in batches) of in-memory buffer for dataset shuffling")
 tf.flags.DEFINE_integer("batch_size", 50, "batch size")
@@ -24,4 +24,6 @@ tf.flags.DEFINE_float("sparsity_lambda", 0.001, "sparsity constraint on loss")
 tf.flags.DEFINE_float("emphasis_alpha", 0.5, "weight given to learning corrupted dimensions")
 tf.flags.DEFINE_float("emphasis_beta", 0.5, "weight given to learning uncorrupted dimensions")
 tf.flags.DEFINE_integer("num_corrupt", 1, "number of corrupted examples per original examples")
+tf.flags.DEFINE_string("output_pattern", "ae_out", "output file pattern for both logging and encoding")
+tf.flags.DEFINE_bool("redirect_stdout", False, "redirects anything printed to stdout to file prefixed by output_pattern in output_dir")
 FLAGS = tf.flags.FLAGS
