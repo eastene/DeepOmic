@@ -16,10 +16,12 @@ tf.flags.DEFINE_integer("num_parallel_calls", 8, "number of parallel dataset par
 tf.flags.DEFINE_integer("prefetch_buffer_size", 200, "size (in batches) of in-memory buffer to prefetch records before parsing")
 tf.flags.DEFINE_integer("num_comb_epochs", 200, "Number of epochs to train in combination.")
 tf.flags.DEFINE_integer("num_epochs", 100, "number of epochs for training")
-tf.flags.DEFINE_string("data_dir", "", "directory in which input data is located")
+tf.flags.DEFINE_string("data_dir", path.realpath(__file__), "directory in which input data is located")
+tf.flags.DEFINE_string("output_dir", path.realpath(__file__), "directory in which to save encoded data")
 tf.flags.DEFINE_string("checkpoint_dir", path.join(path.dirname(path.realpath(__file__)), "tmp", ""),
                        "directory in which to save model checkpoints (by default creates a tmp directory in this file's directory")
-tf.flags.DEFINE_float("sparsity_lambda", 1, "sparsity constraint on loss")
-tf.flags.DEFINE_float("emphasis_alpha", 0.1, "weight given to learning corrupted dimensions")
-tf.flags.DEFINE_float("emphasis_beta", 0.9, "weight given to learning uncorrupted dimensions")
+tf.flags.DEFINE_float("sparsity_lambda", 0.001, "sparsity constraint on loss")
+tf.flags.DEFINE_float("emphasis_alpha", 0.5, "weight given to learning corrupted dimensions")
+tf.flags.DEFINE_float("emphasis_beta", 0.5, "weight given to learning uncorrupted dimensions")
+tf.flags.DEFINE_integer("num_corrupt", 1, "number of corrupted examples per original examples")
 FLAGS = tf.flags.FLAGS

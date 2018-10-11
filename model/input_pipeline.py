@@ -33,14 +33,16 @@ class InputPipeline:
     def omic_data_parse_fn(self, example):
         # format of each training example
         example_fmt = {
+            "sid": tf.FixedLenFeature((), tf.string),
             "X": tf.FixedLenFeature((1317,), tf.float32),  # 1317 = number of SOMA attributes
             "Y": tf.FixedLenFeature((1317,), tf.float32),  # 1317 = number of SOMA attributes
             "C": tf.FixedLenFeature((1317,), tf.int64)
         }
 
         parsed = tf.parse_single_example(example, example_fmt)
+        sid = tf.cast(parsed['sid'], dtype=tf.string)
 
-        return parsed['X'], parsed['C'], parsed['Y']
+        return sid, parsed['X'], parsed['C'], parsed['Y']
 
     def input_fn(self):
         print("Looking for data files matching: {}\nIn: {}".format(self.file_pattern, self.data_dir))

@@ -11,10 +11,10 @@ from utils.data_utils import split_omics
 DATA_DIR = '/home/evan/PycharmProjects/DeepOmic/data/'
 FILE_PATTERN = DATA_DIR + '*.csv'
 
-NUM_CORRUPT_EXAMPLES=1
-CORRUPTION_PR=0.1  # percent of dimensions to corrupt
-CORRUPTION_STR=1
-SEED=None
+NUM_CORRUPT_EXAMPLES = 1
+CORRUPTION_PR = 0.1  # percent of dimensions to corrupt
+CORRUPTION_STR = 1
+SEED = None
 
 random.seed(SEED)
 
@@ -30,14 +30,14 @@ def corrupt_random_dimensions(X, skip):
 
 csv_files = glob(FILE_PATTERN)
 
-
 for f in csv_files:
 
     data = pd.read_csv(f, low_memory=False)
 
-    #clin, soma, metab = split_omics(data, types=["clinical", "soma", "metab"])
+    # clin, soma, metab = split_omics(data, types=["clinical", "soma", "metab"])
 
-    soma=data.iloc[:,1:]
+    soma = data.iloc[:, 1:]
+    sids = data.iloc[:, 0]
 
     filename = ntpath.basename(f)
     base, ext = os.path.splitext(filename)
@@ -56,6 +56,7 @@ for f in csv_files:
                 example = tf.train.Example(
                     features=tf.train.Features(
                         feature={
+                            'sid': tf.train.Feature(bytes_list=tf.train.BytesList(value=[bytes(sids[i], encoding='ascii')])),
                             'X': tf.train.Feature(float_list=tf.train.FloatList(value=X)),
                             'Y': tf.train.Feature(float_list=tf.train.FloatList(value=soma.iloc[i, :])),
                             # TODO change to ByteList for efficiency
