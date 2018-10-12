@@ -134,9 +134,13 @@ def squared_emphasized_sparse_loss(labels,
     z = tf.boolean_mask(predictions, ~corrupted_inds)
 
     # if training on uncorrupted examples, no need to select indices and alpha effectively 0
-    if beta == 1:
+    if x_c is None:
         lhs = 0.0
         rhs = tf.reduce_sum(tf.square(tf.subtract(labels, predictions)))
+
+    elif beta == 1:
+        lhs = 0.0
+        rhs = tf.reduce_sum(tf.square(tf.subtract(x, z)))
 
     # if training on examples with corrupted indices
     else:

@@ -12,7 +12,7 @@ DATA_DIR = '/home/evan/PycharmProjects/DeepOmic/data/'
 FILE_PATTERN = DATA_DIR + '*.csv'
 
 NUM_CORRUPT_EXAMPLES = 3
-CORRUPTION_PR = 0.1  # percent of dimensions to corrupt
+CORRUPTION_PR = 0.25  # percent of dimensions to corrupt
 CORRUPTION_STR = 1
 SEED = None
 
@@ -20,12 +20,13 @@ random.seed(SEED)
 
 
 def corrupt_random_dimensions(X, skip):
+    X_c = X.copy()
     if skip:
-        return X, np.random.binomial(n=1, p=0, size=X.shape[0]) == 1
+        return X_c, np.random.binomial(n=1, p=0, size=X.shape[0]) == 1
 
     corrupt = np.random.binomial(n=1, p=CORRUPTION_PR, size=X.shape[0]) == 1
-    X[corrupt] = X[corrupt] + random.uniform(0, 1 * CORRUPTION_STR)
-    return X, corrupt
+    X_c[corrupt] = X_c[corrupt] + random.uniform(0.01, 1 * CORRUPTION_STR)
+    return X_c, corrupt
 
 
 csv_files = glob(FILE_PATTERN)

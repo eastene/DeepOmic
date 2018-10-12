@@ -76,8 +76,8 @@ class DeepOmicModel:
         return self.loss(labels=labels, predictions=predictions, encoded=encoded,
                          corrupted_inds=corrupted_inds, lam=lam, axis=axis, alpha=alpha, beta=beta)
 
-    def get_optimizer(self, learning_rate):
-        return self.optimizer(learning_rate=learning_rate)
+    def get_optimizer(self, learning_rate, name="adam"):
+        return self.optimizer(learning_rate=learning_rate, name=name)
 
     def get_enc_dec_name(self, num):
         return (self.encoder_prefix + str(num), self.decoder_prefix + str(num))
@@ -187,7 +187,7 @@ class DeepOmicModel:
                                               beta=1)
 
                 # Get the specified optimizer.
-                optimizer = self.get_optimizer(self.learning_rate)
+                optimizer = self.get_optimizer(self.learning_rate, "adam_layers")
 
                 # Get the variables that will be trained by the optimizer (this should be only the variables for
                 # this level's encoder and decoder
@@ -230,7 +230,7 @@ class DeepOmicModel:
             # Full depth network
             network = self.make_stack()
             # Optimize all variables at once
-            optimizer = self.get_optimizer(self.learning_rate / 100)
+            optimizer = self.get_optimizer(self.learning_rate / 100, "adam_comb")
 
             # Get the loss function specified and pass it the "clean" input
             loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[-1].output,
@@ -243,6 +243,7 @@ class DeepOmicModel:
                                           beta=1)
 
             self.train_op = optimizer.minimize(loss)
+
             # Initialize variables.
             sess.run(tf.global_variables_initializer())
             # Restore layers
@@ -347,6 +348,12 @@ class DeepOmicModel:
         pca = PCA(n_components=2)
         xy = pca.fit_transform(data[:, 1:])
         plt.scatter(xy[:, 0], xy[:, 1])
+        plt.title("alpha={} beta={} lambda={} ncorr={}".format(
+            FLAGS.emphasis_alpha,
+            FLAGS.emphasis_beta,
+            FLAGS.sparsity_lambda,
+            FLAGS.num_corrupt
+        ))
         plt.show()
 
 
