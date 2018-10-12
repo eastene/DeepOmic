@@ -11,7 +11,7 @@ from utils.data_utils import split_omics
 DATA_DIR = '/home/evan/PycharmProjects/DeepOmic/data/'
 FILE_PATTERN = DATA_DIR + '*.csv'
 
-NUM_CORRUPT_EXAMPLES = 1
+NUM_CORRUPT_EXAMPLES = 3
 CORRUPTION_PR = 0.1  # percent of dimensions to corrupt
 CORRUPTION_STR = 1
 SEED = None

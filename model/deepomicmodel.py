@@ -1,15 +1,15 @@
-import tensorflow as tf
-import numpy as np
-import pandas as pd
-from model.flags import FLAGS
-from model.loss import *
-from model.input_pipeline import InputPipeline
-from model.utils import redirects_stdout
-from model.decoder import Decoder
-from model.encoder import Encoder
-
+from datetime import datetime
+from time import time
 import os.path as path
 from os import makedirs
+
+import pandas as pd
+
+from model.decoder import Decoder
+from model.encoder import Encoder
+from model.input_pipeline import InputPipeline
+from model.loss import *
+from model.utils import print_config, redirects_stdout
 
 FILE_PATTERN = "*.tfrecord"
 
@@ -144,6 +144,7 @@ class DeepOmicModel:
                     self.corrupt_mask: cm,
                     self.expected: y
                 }
+
                 # Run encode operation
                 _, c = sess.run([train_op, loss], feed_dict=feed_dict)
 
@@ -153,7 +154,6 @@ class DeepOmicModel:
         except tf.errors.OutOfRangeError:
             return c_tot, n_batches  # end of data set reached, proceed to next epoch
 
-    @redirects_stdout
     def train_in_layers(self, start_layer=0):
         with tf.Session() as sess:
             # Train each layer separately.
@@ -179,6 +179,12 @@ class DeepOmicModel:
                                           encoded=self.encode_layers[i].output,
                                           corrupted_inds=self.corrupt_mask, lam=self.lam, axis=1, alpha=self.alpha,
                                           beta=self.beta)
+
+                # for testing, use *pure* mean squared error
+                loss_sme = self.get_loss_func(labels=self.expected, predictions=network,
+                                              encoded=self.encode_layers[i].output,
+                                              lam=0, corrupted_inds=self.corrupt_mask, axis=1, alpha=0,
+                                              beta=1)
 
                 # Get the specified optimizer.
                 optimizer = self.get_optimizer(self.learning_rate)
@@ -206,16 +212,17 @@ class DeepOmicModel:
                         print("No previous checkpoint found for layer " + str(j) + ", layer will be initialized.")
 
                 # Iterate through FLAGS.num_epochs epochs for each layer of training.
-                #writer = tf.summary.FileWriter(".")
-                #writer.add_graph(tf.get_default_graph())
+                # writer = tf.summary.FileWriter(".")
+                # writer.add_graph(tf.get_default_graph())
                 for epoch in range(FLAGS.num_epochs):
                     # Run the epoch
                     c, n_batches = self.run_epoch(sess, self.train_op, loss)
                     # Save the result in a checkpoint directory with the layer name.
                     self.layer_savers[i].save(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i))
-                    ts_loss = self.get_test_acc(sess, loss)
+                    ts_loss, ts_loss_pure = self.get_test_acc(sess, loss, loss_sme)
                     print("\rLoss: {:.3f}".format(c / n_batches) + " Test Set Loss: {:.3f}".format(
-                        ts_loss) + " at Epoch " + str(epoch), end="")
+                        ts_loss) + " SME-only Test Loss: {:.3f}".format(ts_loss_pure) + " at Epoch " + str(epoch),
+                          end="")
                 print("\n")
 
             # Train layers together
@@ -224,14 +231,18 @@ class DeepOmicModel:
             network = self.make_stack()
             # Optimize all variables at once
             optimizer = self.get_optimizer(self.learning_rate / 100)
+
             # Get the loss function specified and pass it the "clean" input
             loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[-1].output,
                                       lam=self.lam, corrupted_inds=self.corrupt_mask, axis=1, alpha=self.alpha,
                                       beta=self.beta)
             # for testing, use *pure* mean squared error
-            loss_test = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[-1].output,
-                                      lam=0, corrupted_inds=self.corrupt_mask, axis=1, alpha=0,
-                                      beta=1)
+            loss_sme = self.get_loss_func(labels=self.expected, predictions=network,
+                                          encoded=self.encode_layers[-1].output,
+                                          lam=0, corrupted_inds=self.corrupt_mask, axis=1, alpha=0,
+                                          beta=1)
+
+            self.train_op = optimizer.minimize(loss)
             # Initialize variables.
             sess.run(tf.global_variables_initializer())
             # Restore layers
@@ -247,13 +258,15 @@ class DeepOmicModel:
                 # print("Saving %d layers.\n" % num_layers)
                 for j in range(num_layers):
                     self.layer_savers[j].save(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j))
-                ts_loss = self.get_test_acc(sess, loss_test)
+                ts_loss, ts_loss_pure = self.get_test_acc(sess, loss, loss_sme)
                 print("\rLoss: {:.3f}".format(c / n_batches) + " Test Set Loss: {:.3f}".format(
-                    ts_loss) + " at Epoch " + str(i), end="")
+                    ts_loss) + " SME-only Test Loss: {:.3f}".format(ts_loss_pure) + " at Epoch " + str(i), end="")
+            print("\n")
 
-    def get_test_acc(self, sess, loss):
+    def get_test_acc(self, sess, loss, sme_loss):
         # evaluate
         m_tot = 0
+        sme_tot = 0
         n_batches = 0
         sess.run(self.dataset.initialize_eval())
         # self.distance = tf.square(tf.subtract(self.input, network))
@@ -265,56 +278,13 @@ class DeepOmicModel:
                 feed_dict = {self.input: x,
                              self.corrupt_mask: cm,
                              self.expected: y}
-                m = sess.run([loss], feed_dict=feed_dict)
-                m_tot += m[0]
+                m, m_sme = sess.run([loss, sme_loss], feed_dict=feed_dict)
+                m_tot += m
+                sme_tot += m_sme
                 n_batches += 1
             except tf.errors.OutOfRangeError:
                 break
-        return m_tot / n_batches
-
-    def train(self):
-        """Trains all layers of the Autoencoder Stack at once."""
-        with tf.Session() as sess:
-
-            writer = tf.summary.FileWriter('.')
-
-            network = self.make_stack()
-
-            loss = self.get_loss_func(labels=self.input, predictions=network, corrupted_inds=self.corrupt_mask, axis=1,
-                                      alpha=0.4, beta=0.6)
-            optimizer = tf.train.AdamOptimizer(self.learning_rate)
-            train_op = optimizer.minimize(loss)
-            init_op = tf.global_variables_initializer()
-            saver = tf.train.Saver()
-            if tf.train.checkpoint_exists(FLAGS.checkpoint_dir):
-                saver.restore(sess, FLAGS.checkpoint_dir)
-                print("Model restored.")
-            else:
-                sess.run(init_op)
-
-            for epoch in range(FLAGS.num_epochs):
-                c, n_batches = self.run_epoch(sess, train_op=train_op, loss=loss)
-
-                print("Epoch:", (epoch + 1), "cost =", "{:.3f}".format(c / n_batches))
-                save_path = saver.save(sess, FLAGS.checkpoint_dir)
-                print("Model saved in path: %s" % save_path)
-                test_acc = self.get_test_acc(sess)
-                print("Training Accuracy: {}".format(test_acc))
-
-    def predict(self, input):
-        with tf.Session() as sess:
-            network = self.make_stack()
-            sess.run(tf.global_variables_initializer())
-            num_layers = len(self.encode_layers)
-            # Check if saver layers exist yet. If not, create them.
-            layer_saver = tf.train.Saver()
-            for i in range(num_layers):
-                if tf.train.checkpoint_exists(FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i)):
-                    print("Restoring Layer %d" % i)
-                    layer_saver.restore(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(i))
-
-            # Run prediction using loaded model
-            sess.run([network], feed_dict={self.input: input})
+        return m_tot / n_batches, sme_tot / n_batches
 
     def encode(self, to_file=""):
         data = np.empty((1, 50 + 1))
@@ -380,8 +350,18 @@ class DeepOmicModel:
         plt.show()
 
 
-if __name__ == '__main__':
+@redirects_stdout
+def runner():
+    print("Training Started at: {}".format(datetime.now()))
+    timestamp = str(time()).replace('.', '')
+    print("Assigning this run UID: {}".format(timestamp))
+    print_config()
     dom = DeepOmicModel(0.00001)
     dom.train_in_layers()
-    dom.encode("soma_ae_beta05_alpha05_lambda0_ncorr1.csv")
+    dom.encode("{}_{}.csv".format(FLAGS.output_pattern, timestamp))
     dom.plot_results()
+    print("Training Ended at: {}".format(datetime.now()))
+
+
+if __name__ == '__main__':
+    runner()
