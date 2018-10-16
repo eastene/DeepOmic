@@ -117,14 +117,11 @@ def squared_emphasized_sparse_loss(labels,
         :param beta: weight for error on components that were not corrupted
         :return: squared loss, emphasized by corrupted component weight
     """
-    assert (labels.shape[axis] == predictions.shape[axis])
     assert (labels.dtype == predictions.dtype)
     assert (beta + alpha == 1.0)
 
-    num_elems = labels.shape[axis].value * FLAGS.batch_size
-
     # sparsity penalty, added to each sample
-    omega = lam * tf.reduce_sum(tf.abs(encoded)) if lam != 0 else 0
+    omega = lam * tf.reduce_sum(tf.abs(encoded)) if lam != 0 else 0.0
 
     # corrupted features
     x_c = tf.boolean_mask(labels, corrupted_inds)
@@ -135,19 +132,18 @@ def squared_emphasized_sparse_loss(labels,
 
     # if training on uncorrupted examples, no need to select indices and alpha effectively 0
     if x_c is None:
-        lhs = 0.0
-        rhs = tf.reduce_sum(tf.square(tf.subtract(labels, predictions)))
+        axis_mean = tf.reduce_mean(tf.square(tf.subtract(labels, predictions)), axis=axis)
 
     elif beta == 1:
-        lhs = 0.0
-        rhs = tf.reduce_sum(tf.square(tf.subtract(x, z)))
+        axis_mean = tf.reduce_mean(tf.square(tf.subtract(x, z)), axis=axis)
 
     # if training on examples with corrupted indices
     else:
-        lhs = alpha * tf.reduce_sum(tf.square(tf.subtract(x_c, z_c)))
-        rhs = beta * tf.reduce_sum(tf.square(tf.subtract(x, z)))
+        lhs = alpha * tf.reduce_mean(tf.square(tf.subtract(x_c, z_c)), axis=axis)
+        rhs = beta * tf.reduce_mean(tf.square(tf.subtract(x, z)), axis=axis)
+        axis_mean = tf.concat([lhs, rhs], axis=axis)
 
-    return (tf.add(lhs, rhs) + omega) / num_elems
+    return tf.reduce_mean(axis_mean + omega)
 
 
 def squared_sparse_loss(labels,
