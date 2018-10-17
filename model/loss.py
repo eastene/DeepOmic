@@ -99,6 +99,7 @@ def cross_entropy_emphasized_loss(labels,
 def squared_emphasized_sparse_loss(labels,
                             predictions,
                             encoded,
+                            is_corr,
                             corrupted_inds=None,
                             lam=0.01,
                             axis=0,
@@ -123,27 +124,23 @@ def squared_emphasized_sparse_loss(labels,
     # sparsity penalty, added to each sample
     omega = lam * tf.reduce_sum(tf.abs(encoded)) if lam != 0 else 0.0
 
-    # corrupted features
-    x_c = tf.boolean_mask(labels, corrupted_inds)
-    z_c = tf.boolean_mask(predictions, corrupted_inds)
-    # uncorrupted features
-    x = tf.boolean_mask(labels, ~corrupted_inds)
-    z = tf.boolean_mask(predictions, ~corrupted_inds)
-
     # if training on uncorrupted examples, no need to select indices and alpha effectively 0
-    if x_c is None:
-        axis_mean = tf.reduce_mean(tf.square(tf.subtract(labels, predictions)), axis=axis)
-
-    elif beta == 1:
-        axis_mean = tf.reduce_mean(tf.square(tf.subtract(x, z)), axis=axis)
+    if beta == 1:
+        uncorr = (~is_corr)
+        uncorr.set_shape([None])
+        labs_uncorr = tf.boolean_mask(labels, uncorr, axis=axis, name='labels_uncorrupt')
+        preds_uncorr = tf.boolean_mask(predictions, uncorr, axis=axis, name='predictions_uncorrupt')
+        axis_mean = tf.reduce_mean(tf.square(tf.subtract(labs_uncorr, preds_uncorr)), axis=axis)
 
     # if training on examples with corrupted indices
     else:
-        lhs = alpha * tf.reduce_mean(tf.square(tf.subtract(x_c, z_c)), axis=axis)
-        rhs = beta * tf.reduce_mean(tf.square(tf.subtract(x, z)), axis=axis)
-        axis_mean = tf.concat([lhs, rhs], axis=axis)
+        # Multiply boolean mask by alpha to multiply each value by alpha in the end
+        mults = tf.scalar_mul(alpha, tf.cast(corrupted_inds, dtype=tf.float32))
+        mults = mults + tf.scalar_mul(beta, tf.cast(~corrupted_inds, dtype=tf.float32))
+        squares = tf.square(tf.subtract(labels, predictions))
+        axis_mean = tf.reduce_mean(squares * mults, axis=axis)
 
-    return tf.reduce_mean(axis_mean + omega)
+    return tf.reduce_mean(axis_mean) # + omega)
 
 
 def squared_sparse_loss(labels,

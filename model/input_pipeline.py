@@ -37,14 +37,17 @@ class InputPipeline:
             "X": tf.FixedLenFeature((FLAGS.input_dims,), tf.float32),  # 1317 = number of SOMA attributes
             "Y": tf.FixedLenFeature((FLAGS.input_dims,), tf.float32),  # 1317 = number of SOMA attributes
             "C": tf.FixedLenFeature((FLAGS.input_dims,), tf.int64),
+            "is_corr": tf.FixedLenFeature((1,), tf.int64),
             "FEV1_ch": tf.FixedLenFeature((1,), tf.float32),
             "Thirona_ch": tf.FixedLenFeature((1,), tf.float32)
         }
 
         parsed = tf.parse_single_example(example, example_fmt)
         sid = tf.cast(parsed['sid'], dtype=tf.string)
+        C = tf.cast(parsed['C'], dtype=tf.bool)
+        is_corr = tf.cast(parsed['is_corr'], dtype=tf.bool)
 
-        return sid, parsed['X'], parsed['C'], parsed['Y'], parsed["FEV1_ch"], parsed["Thirona_ch"]
+        return sid, parsed['X'], C, is_corr, parsed['Y'], parsed["FEV1_ch"], parsed["Thirona_ch"]
 
     def input_fn(self):
         print("Looking for data files matching: {}\nIn: {}".format(self.file_pattern, self.data_dir))

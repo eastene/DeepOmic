@@ -11,7 +11,7 @@ from utils.data_utils import split_omics
 DATA_DIR = '/home/evan/PycharmProjects/DeepOmic/data/'
 FILE_PATTERN = DATA_DIR + '*.csv'
 
-NUM_CORRUPT_EXAMPLES = 0
+NUM_CORRUPT_EXAMPLES = 2
 CORRUPTION_PR = 0.25  # percent of dimensions to corrupt
 CORRUPTION_STR = 1
 SEED = None
@@ -25,7 +25,7 @@ def corrupt_random_dimensions(X, skip):
         return X_c, np.random.binomial(n=1, p=0, size=X.shape[0]) == 1
 
     corrupt = np.random.binomial(n=1, p=CORRUPTION_PR, size=X.shape[0]) == 1
-    X_c[corrupt] = X_c[corrupt] + random.uniform(0.01 * CORRUPTION_STR, 1 * CORRUPTION_STR)
+    X_c[corrupt] = 0 #X_c[corrupt] + random.uniform(0.01 * CORRUPTION_STR, 1 * CORRUPTION_STR)
     return X_c, corrupt
 
 
@@ -37,7 +37,7 @@ for f in csv_files:
 
     clin, soma, metab = split_omics(data, types=["clinical", "soma", "metab"])
 
-    data = metab
+    data = soma
     sids = clin.iloc[:, 0]
 
     filename = ntpath.basename(f)
@@ -62,6 +62,7 @@ for f in csv_files:
                             'Y': tf.train.Feature(float_list=tf.train.FloatList(value=data.iloc[i, :])),
                             # TODO change to ByteList for efficiency
                             'C': tf.train.Feature(int64_list=tf.train.Int64List(value=corrupted_inds)),
+                            'is_corr': tf.train.Feature(int64_list=tf.train.Int64List(value=[j != 0])),
                             'FEV1_ch': tf.train.Feature(float_list=tf.train.FloatList(value=[clin['Change_P1_P2_FEV1_ml_yr'][i]])),
                             'Thirona_ch': tf.train.Feature(float_list=tf.train.FloatList(value=[clin['Change_Adj_Density_Thirona'][i]]))
                         }

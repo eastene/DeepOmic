@@ -3,6 +3,8 @@ from time import time
 import os.path as path
 from os import makedirs
 
+from tensorflow.python import debug as tf_debug
+
 import pandas as pd
 
 from model.decoder import Decoder
@@ -27,6 +29,7 @@ class DeepOmicModel:
         # self.masking = tf.layers.dropout(self.input,rate=0.05)
         self.corrupt_mask = tf.placeholder(dtype=tf.bool, shape=[None, self.input_dims])
         self.expected = tf.placeholder(dtype=tf.float32, shape=[None, self.input_dims])
+        self.is_corr = tf.placeholder(dtype=tf.bool)
 
         """
         HYPER PARAMETERS
@@ -74,8 +77,8 @@ class DeepOmicModel:
     #    return self.loss(labels=labels, predictions=predictions,
     #                                       corrupted_inds=corrupted_inds, axis=axis, alpha=alpha, beta=beta)
 
-    def get_loss_func(self, labels, predictions, encoded, lam, corrupted_inds, axis, alpha, beta):
-        return self.loss(labels=labels, predictions=predictions, encoded=encoded,
+    def get_loss_func(self, labels, predictions, encoded, is_corr, lam, corrupted_inds, axis, alpha, beta):
+        return self.loss(labels=labels, predictions=predictions, encoded=encoded, is_corr=is_corr,
                          corrupted_inds=corrupted_inds, lam=lam, axis=axis, alpha=alpha, beta=beta)
 
     def get_optimizer(self, learning_rate, name="adam"):
@@ -139,11 +142,12 @@ class DeepOmicModel:
         sess.run(self.dataset.initialize_train())
         try:
             while True:
-                sids, x, cm, y, fev_ch, thirona_ch = sess.run(self.next_train_elem)
+                sids, x, cm, is_corr, y, fev_ch, thirona_ch = sess.run(self.next_train_elem)
                 # train on X, and corruptions of X
                 feed_dict = {
                     self.input: x,
                     self.corrupt_mask: cm,
+                    self.is_corr: is_corr,
                     self.expected: y
                 }
 
@@ -158,6 +162,8 @@ class DeepOmicModel:
 
     def train_in_layers(self, start_layer=0):
         with tf.Session() as sess:
+            #sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+
             # Train each layer separately.
             # First layer trains:
             #  dec_0(enc_0(data))
@@ -178,13 +184,13 @@ class DeepOmicModel:
 
                 # Get the loss function specified and pass it the "clean" input
                 loss = self.get_loss_func(labels=self.expected, predictions=network,
-                                          encoded=self.encode_layers[i].output,
+                                          encoded=self.encode_layers[i].output, is_corr=self.is_corr,
                                           corrupted_inds=self.corrupt_mask, lam=self.lam, axis=0, alpha=self.alpha,
                                           beta=self.beta)
 
                 # for testing, use *pure* mean squared error
                 loss_sme = self.get_loss_func(labels=self.expected, predictions=network,
-                                              encoded=self.encode_layers[i].output,
+                                              encoded=self.encode_layers[i].output, is_corr=self.is_corr,
                                               lam=0, corrupted_inds=self.corrupt_mask, axis=0, alpha=0,
                                               beta=1)
 
@@ -236,11 +242,11 @@ class DeepOmicModel:
 
             # Get the loss function specified and pass it the "clean" input
             loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[-1].output,
-                                      lam=self.lam, corrupted_inds=self.corrupt_mask, axis=0, alpha=self.alpha,
-                                      beta=self.beta)
+                                      is_corr=self.is_corr, lam=self.lam, corrupted_inds=self.corrupt_mask, axis=0,
+                                      alpha=self.alpha, beta=self.beta)
             # for testing, use *pure* mean squared error
             loss_sme = self.get_loss_func(labels=self.expected, predictions=network,
-                                          encoded=self.encode_layers[-1].output,
+                                          encoded=self.encode_layers[-1].output, is_corr=self.is_corr,
                                           lam=0, corrupted_inds=self.corrupt_mask, axis=0, alpha=0,
                                           beta=1)
 
@@ -266,6 +272,8 @@ class DeepOmicModel:
                     ts_loss) + " SME-only Test Loss: {:.3f}".format(ts_loss_pure) + " at Epoch " + str(i), end="")
             print("\n")
 
+            # Test regression performance
+
     def get_test_acc(self, sess, loss, sme_loss):
         # evaluate
         m_tot = 0
@@ -277,9 +285,10 @@ class DeepOmicModel:
         while True:
             try:
                 # train on X, and corruptions of X
-                sids, x, cm, y, fev_ch, thirona_ch = sess.run(self.next_eval_elem)
+                sids, x, cm, is_corr, y, fev_ch, thirona_ch = sess.run(self.next_eval_elem)
                 feed_dict = {self.input: x,
                              self.corrupt_mask: cm,
+                             self.is_corr: is_corr,
                              self.expected: y}
                 m, m_sme = sess.run([loss, sme_loss], feed_dict=feed_dict)
                 m_tot += m
@@ -302,7 +311,7 @@ class DeepOmicModel:
             sess.run(self.dataset.initialize_train())
             while True:
                 try:
-                    sids, x, cm, y, fev_ch, thirona_ch = sess.run(self.next_train_elem)
+                    sids, x, cm, is_coor, y, fev_ch, thirona_ch = sess.run(self.next_train_elem)
                     # train on X, and corruptions of X
                     feed_dict = {
                         self.input: x,
@@ -319,7 +328,7 @@ class DeepOmicModel:
                     while True:
                         try:
 
-                            sids, x, cm, y, fev_ch, thirona_ch = sess.run(self.next_eval_elem)
+                            sids, x, cm, is_coor, y, fev_ch, thirona_ch = sess.run(self.next_eval_elem)
                             # train on X, and corruptions of X
                             feed_dict = {
                                 self.input: x,
