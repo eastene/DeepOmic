@@ -100,6 +100,7 @@ def squared_emphasized_sparse_loss(labels,
                             predictions,
                             encoded,
                             is_corr,
+                            ignore_corr,
                             corrupted_inds=None,
                             lam=0.01,
                             axis=0,
@@ -119,28 +120,34 @@ def squared_emphasized_sparse_loss(labels,
         :return: squared loss, emphasized by corrupted component weight
     """
     assert (labels.dtype == predictions.dtype)
-    assert (beta + alpha == 1.0)
+    assert (beta + alpha <= 3.0)
+    assert (alpha >= 1)
+    assert (beta >= 1)
 
     # sparsity penalty, added to each sample
     omega = lam * tf.reduce_sum(tf.abs(encoded)) if lam != 0 else 0.0
 
-    # if training on uncorrupted examples, no need to select indices and alpha effectively 0
-    if beta == 1:
+    # if training on uncorrupted examples, no need for alpha, so beta forced to 1
+    if ignore_corr:
         uncorr = (~is_corr)
         uncorr.set_shape([None])
         labs_uncorr = tf.boolean_mask(labels, uncorr, axis=axis, name='labels_uncorrupt')
         preds_uncorr = tf.boolean_mask(predictions, uncorr, axis=axis, name='predictions_uncorrupt')
         axis_mean = tf.reduce_mean(tf.square(tf.subtract(labs_uncorr, preds_uncorr)), axis=axis)
 
-    # if training on examples with corrupted indices
+    # if training on examples with corrupted indices, effectively beta = alpha = 1
+    elif beta == 1 and alpha == 1:
+        axis_mean = tf.reduce_mean(tf.square(tf.subtract(labels, predictions)), axis=axis)
+
+    # if training on examples with corrupted indices and using alpha/beta
     else:
         # Multiply boolean mask by alpha to multiply each value by alpha in the end
-        mults = tf.scalar_mul(alpha, tf.cast(corrupted_inds, dtype=tf.float32))
-        mults = mults + tf.scalar_mul(beta, tf.cast(~corrupted_inds, dtype=tf.float32))
+        mults = tf.scalar_mul(alpha, tf.cast(corrupted_inds, dtype=tf.float32)) \
+                + tf.scalar_mul(beta, tf.cast(~corrupted_inds, dtype=tf.float32))
         squares = tf.square(tf.subtract(labels, predictions))
-        axis_mean = tf.reduce_mean(squares * mults, axis=axis)
+        axis_mean = tf.reduce_mean(tf.multiply(squares, mults), axis=axis)
 
-    return tf.reduce_mean(axis_mean) # + omega)
+    return tf.reduce_mean(axis_mean)  # + omega)
 
 
 def squared_sparse_loss(labels,
