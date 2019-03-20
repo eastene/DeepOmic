@@ -3,8 +3,8 @@
 A project to test various architectures of deep autoencoders for reducing the dimensionality of 'omics data.
 
 ## Running
-0. It is recommended to first convert your data from comma or tab delimited files to tfrecords if your data is large (more than a couple hundred rows) to speed up training. If your data is in csv format you can run `csv2tfrecord.py` in the data directory to convert.
-1. To run DeepOmic with default parameters:
+* It is recommended to first convert your data from comma or tab delimited files to tfrecords if your data is large (more than a couple hundred rows) to speed up training. If your data is in csv format you can run `csv2tfrecord.py` in the data directory to convert.
+* To run DeepOmic with default parameters:
   1. `cd model`
   2. `python deepomicmodel.py`
 
