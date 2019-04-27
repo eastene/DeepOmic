@@ -13,7 +13,7 @@ from model.flags import FLAGS
 
 class InputPipeline:
 
-    def __init__(self, file_pattern, size_of_split=10):
+    def __init__(self, file_pattern, size_of_split=5):
         """
         Input pipeline based on the Tensorflow Dataset API
         :param file_pattern: regex pattern of files to include as input (.tfrecord)
@@ -33,14 +33,21 @@ class InputPipeline:
     def omic_data_parse_fn(self, example):
         # format of each training example
         example_fmt = {
-            "X": tf.FixedLenFeature((1317,), tf.float32),  # 1317 = number of SOMA attributes
-            "Y": tf.FixedLenFeature((1317,), tf.float32),  # 1317 = number of SOMA attributes
-            "C": tf.FixedLenFeature((1317,), tf.int64)
+            "sid": tf.FixedLenFeature((), tf.string),
+            "X": tf.FixedLenFeature((FLAGS.input_dims,), tf.float32),  # 1317 = number of SOMA attributes
+            "Y": tf.FixedLenFeature((FLAGS.input_dims,), tf.float32),  # 1317 = number of SOMA attributes
+            "C": tf.FixedLenFeature((FLAGS.input_dims,), tf.int64),
+            "is_corr": tf.FixedLenFeature((1,), tf.int64),
+            "clin_feat": tf.FixedLenFeature((1), tf.float32)
         }
 
         parsed = tf.parse_single_example(example, example_fmt)
+        sid = tf.cast(parsed['sid'], dtype=tf.string)
+        C = tf.cast(parsed['C'], dtype=tf.bool)
+        is_corr = tf.cast(parsed['is_corr'], dtype=tf.bool)
+        clin_feat = tf.cast(parsed["clin_feat"], dtype=tf.float32)
 
-        return parsed['X'], parsed['C'], parsed['Y']
+        return sid, parsed['X'], C, is_corr, parsed['Y'], clin_feat
 
     def input_fn(self):
         print("Looking for data files matching: {}\nIn: {}".format(self.file_pattern, self.data_dir))

@@ -99,6 +99,8 @@ def cross_entropy_emphasized_loss(labels,
 def squared_emphasized_sparse_loss(labels,
                             predictions,
                             encoded,
+                            is_corr,
+                            ignore_corr,
                             corrupted_inds=None,
                             lam=0.01,
                             axis=0,
@@ -117,32 +119,35 @@ def squared_emphasized_sparse_loss(labels,
         :param beta: weight for error on components that were not corrupted
         :return: squared loss, emphasized by corrupted component weight
     """
-    assert (labels.shape[axis] == predictions.shape[axis])
     assert (labels.dtype == predictions.dtype)
-
-    num_elems = labels.shape[axis].value * FLAGS.batch_size
+    assert (beta + alpha <= 3.0)
+    assert (alpha >= 1)
+    assert (beta >= 1)
 
     # sparsity penalty, added to each sample
-    omega = lam * tf.reduce_sum(tf.abs(encoded))
+    omega = lam * tf.reduce_sum(tf.abs(encoded)) if lam != 0 else 0.0
 
-    # corrupted features
-    x_c = tf.boolean_mask(labels, corrupted_inds)
-    z_c = tf.boolean_mask(predictions, corrupted_inds)
-    # uncorrupted features
-    x = tf.boolean_mask(labels, ~corrupted_inds)
-    z = tf.boolean_mask(predictions, ~corrupted_inds)
+    # if training on uncorrupted examples, no need for alpha, so beta forced to 1
+    if ignore_corr:
+        uncorr = (~is_corr)
+        uncorr.set_shape([None])
+        labs_uncorr = tf.boolean_mask(labels, uncorr, axis=axis, name='labels_uncorrupt')
+        preds_uncorr = tf.boolean_mask(predictions, uncorr, axis=axis, name='predictions_uncorrupt')
+        axis_mean = tf.reduce_mean(tf.square(tf.subtract(labs_uncorr, preds_uncorr)), axis=axis)
 
-    # if training on examples with corrupted indices
-    if x_c is not None:
-        lhs = alpha * tf.reduce_sum(tf.square(tf.subtract(x_c, z_c)))
-        rhs = beta * tf.reduce_sum(tf.square(tf.subtract(x, z)))
+    # if training on examples with corrupted indices, effectively beta = alpha = 1
+    elif beta == 1 and alpha == 1:
+        axis_mean = tf.reduce_mean(tf.square(tf.subtract(labels, predictions)), axis=axis)
 
-    # if training on uncorrupted examples, no need to select indices and alpha effectively 0
+    # if training on examples with corrupted indices and using alpha/beta
     else:
-        lhs = 0.0
-        rhs = 1.0 * tf.reduce_sum(tf.square(tf.subtract(labels, predictions)))
+        # Multiply boolean mask by alpha to multiply each value by alpha in the end
+        mults = tf.scalar_mul(alpha, tf.cast(corrupted_inds, dtype=tf.float32)) \
+                + tf.scalar_mul(beta, tf.cast(~corrupted_inds, dtype=tf.float32))
+        squares = tf.square(tf.subtract(labels, predictions))
+        axis_mean = tf.reduce_mean(tf.multiply(squares, mults), axis=axis)
 
-    return (tf.add(lhs, rhs) + omega) / num_elems
+    return tf.reduce_mean(axis_mean)  # + omega)
 
 
 def squared_sparse_loss(labels,
