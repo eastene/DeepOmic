@@ -13,7 +13,7 @@ from model.flags import FLAGS
 
 class InputPipeline:
 
-    def __init__(self, file_pattern, size_of_split=5):
+    def __init__(self, file_pattern, size_of_split=1):
         """
         Input pipeline based on the Tensorflow Dataset API
         :param file_pattern: regex pattern of files to include as input (.tfrecord)
@@ -27,6 +27,7 @@ class InputPipeline:
         self.file_pattern = file_pattern
         self.search_pattern = path.join(self.data_dir, self.file_pattern)
         self.dataset = self.input_fn()
+        self.encode_iter = self.dataset.make_initializable_iterator()
         self.eval_iter = self.dataset.take(size_of_split).make_initializable_iterator()
         self.train_iter = self.dataset.skip(size_of_split).make_initializable_iterator()
 
@@ -37,17 +38,16 @@ class InputPipeline:
             "X": tf.FixedLenFeature((FLAGS.input_dims,), tf.float32),  # 1317 = number of SOMA attributes
             "Y": tf.FixedLenFeature((FLAGS.input_dims,), tf.float32),  # 1317 = number of SOMA attributes
             "C": tf.FixedLenFeature((FLAGS.input_dims,), tf.int64),
-            "is_corr": tf.FixedLenFeature((1,), tf.int64),
-            "clin_feat": tf.FixedLenFeature((1), tf.float32)
+            "is_corr": tf.FixedLenFeature((1,), tf.int64)#,
+            #"clin_feat": tf.FixedLenFeature((1), tf.float32)
         }
 
         parsed = tf.parse_single_example(example, example_fmt)
         sid = tf.cast(parsed['sid'], dtype=tf.string)
         C = tf.cast(parsed['C'], dtype=tf.bool)
         is_corr = tf.cast(parsed['is_corr'], dtype=tf.bool)
-        clin_feat = tf.cast(parsed["clin_feat"], dtype=tf.float32)
 
-        return sid, parsed['X'], C, is_corr, parsed['Y'], clin_feat
+        return sid, parsed['X'], C, is_corr, parsed['Y']
 
     def input_fn(self):
         print("Looking for data files matching: {}\nIn: {}".format(self.file_pattern, self.data_dir))
@@ -84,8 +84,14 @@ class InputPipeline:
     def initialize_eval(self):
         return self.eval_iter.initializer
 
+    def initialize_encode(self):
+        return self.encode_iter.initializer
+
     def next_train_elem(self):
         return self.train_iter.get_next()
 
     def next_eval_elem(self):
         return self.eval_iter.get_next()
+
+    def next_encode_elem(self):
+        return self.encode_iter.get_next()
