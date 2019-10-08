@@ -10,7 +10,7 @@ from sklearn.preprocessing import minmax_scale, normalize
 from utils.data_utils import split_omics
 
 DATA_DIR = '/Users/evan/PycharmProjects/DeepOmic/data/'
-FILE_PATTERN = DATA_DIR + '*.csv'
+FILE_PATTERN = DATA_DIR + '*.txt'
 
 CORRUPTION_DROPOUT = False  # setting will make corruption set dimensions to 0 rather than adding random noise
 NUM_CORRUPT_EXAMPLES = 0  # number of corrupt examples
@@ -36,7 +36,7 @@ csv_files = glob(FILE_PATTERN)
 
 for f in csv_files:
 
-    data = pd.read_csv(f, low_memory=False, delimiter=',', index_col=0)
+    data = pd.read_csv(f, low_memory=False, delimiter='\t', index_col=0)
 
     sids = data.index
 

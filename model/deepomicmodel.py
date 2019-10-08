@@ -77,6 +77,7 @@ class DeepOmicModel:
         """
         MODEL INITIALIZATION
         """
+        tf.set_random_seed(FLAGS.seed)
         self._initialize_layers(self.input_dims, self.layers)
 
     def get_loss_func(self, labels, predictions, encoded, is_corr, lam, corrupted_inds, axis, alpha, beta,

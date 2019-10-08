@@ -29,4 +29,7 @@ tf.flags.DEFINE_bool("redirect_stdout", False, "redirects anything printed to st
 tf.flags.DEFINE_float("learn_rate", 0.001, "learning rate")
 tf.flags.DEFINE_integer("input_dims", 1317, "number of dimensions in the input dataset")
 tf.flags.DEFINE_list("layers", [1000, 500, 100, 50], "layer sizes from layer 0 to layer N, comma seperated values (e.g. 100,50,10")
+tf.flags.DEFINE_integer("seed", 101, "seed for initialization of layers")
+
+
 FLAGS = tf.flags.FLAGS
