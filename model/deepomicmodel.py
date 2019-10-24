@@ -4,42 +4,64 @@ import os.path as path
 from os import makedirs
 
 import pandas as pd
+from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.metrics import silhouette_score
 
 from model.decoder import Decoder
 from model.encoder import Encoder
 from model.input_pipeline import InputPipeline
 from model.loss import *
-from utils.experiment_utils import print_config, redirects_stdout
+from model.utils import print_config, redirects_stdout
 
 FILE_PATTERN = "*.tfrecord"
 
 
 class DeepOmicModel:
 
-    def __init__(self, learning_rate):
+    def __init__(self):
+        """
+        DeepOmicModel
+
+        Autoencoder for exploring parameterization of different autoencoder features
+        (e.g. Sparse Autoencoder, Denoising Autoencoder, etc.) and applying them
+        to high dimensional omic's data.
+        """
+
+        """
+        HYPER PARAMETERS
+        """
+        # Loss HPs
+        self.alpha = FLAGS.emphasis_alpha
+        self.beta = FLAGS.emphasis_beta
+        self.lam = FLAGS.sparsity_lambda
+        self.loss = squared_emphasized_sparse_loss
+        self.optimizer = tf.train.AdamOptimizer
+
+        # Model HPs
+        self.layers = FLAGS.layers
+        self.learning_rate = FLAGS.learn_rate
         self.input_dims = FLAGS.input_dims
 
+        """
+        INPUT PIPELINE
+        """
+
+        # Dataset Iterators
         self.dataset = InputPipeline(FILE_PATTERN)
         self.next_train_elem = self.dataset.next_train_elem()
         self.next_eval_elem = self.dataset.next_eval_elem()
+        self.next_encode_elem = self.dataset.next_encode_elem()
 
+        """
+        MODEL COMPONENTS
+        """
+        # Model Inputs
         self.input = tf.placeholder(dtype=tf.float32, shape=[None, self.input_dims])
-        # self.masking = tf.layers.dropout(self.input,rate=0.05)
         self.corrupt_mask = tf.placeholder(dtype=tf.bool, shape=[None, self.input_dims])
         self.expected = tf.placeholder(dtype=tf.float32, shape=[None, self.input_dims])
         self.is_corr = tf.placeholder(dtype=tf.bool)
         self.predictor = tf.placeholder(dtype=tf.float32, shape=[None, 1])
 
-        """
-        HYPER PARAMETERS
-        """
-        self.alpha = FLAGS.emphasis_alpha
-        self.beta = FLAGS.emphasis_beta
-        self.lam = FLAGS.sparsity_lambda
-
-        """
-        MODEL
-        """
         # List of autoencoder layers
         self.encode_layers = []
         self.decode_layers = []
@@ -52,29 +74,11 @@ class DeepOmicModel:
         self.encoder_prefix = "Encoder_Layer_"
         self.decoder_prefix = "Decoder_Layer_"
 
-        self._initialize_layers(self.input_dims, FLAGS.layers)
-
         """
-        TRAIN
+        MODEL INITIALIZATION
         """
-        self.learning_rate = learning_rate
-        self.loss = squared_emphasized_sparse_loss
-        self.optimizer = tf.train.AdamOptimizer
-
-        """
-        EVAL
-        """
-        # self.distance = tf.square(tf.subtract(self.input, self.decode_layers[-1].layer))
-        # self.eval_op = tf.reduce_mean(self.distance)
-
-        """
-        SAVE & RESTORE
-        """
-        # self.init_op = tf.global_variables_initializer()
-
-    # def get_loss_func(self, labels, predictions, corrupted_inds, axis, alpha, beta):
-    #    return self.loss(labels=labels, predictions=predictions,
-    #                                       corrupted_inds=corrupted_inds, axis=axis, alpha=alpha, beta=beta)
+        tf.set_random_seed(FLAGS.seed)
+        self._initialize_layers(self.input_dims, self.layers)
 
     def get_loss_func(self, labels, predictions, encoded, is_corr, lam, corrupted_inds, axis, alpha, beta,
                       ignore_corr=False):
@@ -100,7 +104,10 @@ class DeepOmicModel:
             # For decoders, output size is equal to the *input* size of the Encoder at this layer.
             # because Decoder(Encoder(data)) == data
             self.encode_layers.append(Encoder(layer_size, name="Encoder_Layer_" + str(ind)))
-            self.decode_layers.append(Decoder(prev_output_size, name="Decoder_Layer_" + str(ind)))
+            if ind == 0:
+                self.decode_layers.append(Decoder(prev_output_size, name="Decoder_Layer_" + str(ind), end=True))
+            else:
+                self.decode_layers.append(Decoder(prev_output_size, name="Decoder_Layer_" + str(ind)))
 
             self.layer_sizes.append((prev_output_size, layer_size))
             # Build checkpoint directories for each layer.
@@ -143,7 +150,7 @@ class DeepOmicModel:
         sess.run(self.dataset.initialize_train())
         try:
             while True:
-                sids, x, cm, is_corr, y, clin_feat = sess.run(self.next_train_elem)
+                sids, x, cm, is_corr, y = sess.run(self.next_train_elem)
                 # train on X, and corruptions of X
                 feed_dict = {
                     self.input: x,
@@ -157,8 +164,7 @@ class DeepOmicModel:
                         self.input: x,
                         self.corrupt_mask: cm,
                         self.is_corr: is_corr,
-                        self.expected: y,
-                        self.predictor: clin_feat
+                        self.expected: y
                     }
 
                 # Run encode operation
@@ -248,7 +254,7 @@ class DeepOmicModel:
             # Full depth network
             network = self.make_stack()
             # Optimize all variables at once
-            optimizer = self.get_optimizer(self.learning_rate / 100, "adam_comb")
+            optimizer = self.get_optimizer(self.learning_rate / 10, "adam_comb")
 
             # Get the loss function specified and pass it the "clean" input
             loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[-1].output,
@@ -295,7 +301,7 @@ class DeepOmicModel:
         while True:
             try:
                 # train on X, and corruptions of X
-                sids, x, cm, is_corr, y, clin_feat = sess.run(self.next_eval_elem)
+                sids, x, cm, is_corr, y = sess.run(self.next_eval_elem)
                 feed_dict = {self.input: x,
                              self.corrupt_mask: cm,
                              self.is_corr: is_corr,
@@ -305,8 +311,7 @@ class DeepOmicModel:
                         self.input: x,
                         self.corrupt_mask: cm,
                         self.is_corr: is_corr,
-                        self.expected: y,
-                        self.predictor: clin_feat
+                        self.expected: y
                     }
                 m, m_sme = sess.run([loss, sme_loss], feed_dict=feed_dict)
                 m_tot += m
@@ -358,8 +363,11 @@ class DeepOmicModel:
                     ts_loss) + " SME-only Test Loss: {:.3f}".format(ts_loss_pure) + " at Epoch " + str(i), end="")
             print("\n")
 
-    def encode(self, to_file=""):
-        data = np.empty((1, int(FLAGS.layers[-1]) + 1))  # +1 to include sids
+    def encode(self, to_file="", est_sil=False):
+        # output dataframe
+        df = pd.DataFrame(columns=["EM{}".format(i) for i in range(int(self.layers[-1]))])
+        df.index.rename("sid", inplace=True)
+
         with tf.Session() as sess:
             # Restore layers
             for j in range(len(self.encode_layers)):
@@ -367,64 +375,71 @@ class DeepOmicModel:
                     print("Restoring layer " + str(j + 1) + " from checkpoint.")
                     self.layer_savers[j].restore(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j))
                 else:
-                    print("ERROR: Layer %d not found." % j + 1)
-            sess.run(self.dataset.initialize_train())
+                    print("ERROR: Layer %d not found." % (j + 1))
+                    exit(1)
+
+            # prep data iterator
+            sess.run(self.dataset.initialize_encode())
+
+            # encode dataset
             while True:
                 try:
-                    sids, x, cm, is_coor, y, clin_feat = sess.run(self.next_train_elem)
-                    # train on X, and corruptions of X
+                    sids, x, cm, is_corr, y = sess.run(self.next_encode_elem)
+
+                    # remove any corrupted rows from encoding
+                    x = x[~is_corr[:, 0], :]
+
+                    # do not encode empty input
+                    if x.size == 0:
+                        continue
+
+                    # encode X
                     feed_dict = {
                         self.input: x,
                         self.corrupt_mask: cm,
                         self.expected: y
                     }
+
                     # Run encode operation
-                    batch = np.hstack(
-                        (np.expand_dims(np.array(list(map(lambda s: s.decode('ascii'), sids))), axis=1),
-                         sess.run(self.encode_layers[-1].output, feed_dict=feed_dict)))
-                    data = np.vstack((data, batch))
+                    out = sess.run(self.encode_layers[-1].output, feed_dict=feed_dict)
+
+                    for row in range(out.shape[0]):
+                        df.loc[sids[row].decode('ascii')] = out[row]
+
                 except tf.errors.OutOfRangeError:
-                    sess.run(self.dataset.initialize_eval())
-                    while True:
-                        try:
-
-                            sids, x, cm, is_coor, y, clin_feat = sess.run(self.next_eval_elem)
-                            # train on X, and corruptions of X
-                            feed_dict = {
-                                self.input: x,
-                                self.corrupt_mask: cm,
-                                self.expected: y
-                            }
-                            # Run encode operation
-                            batch = np.hstack(
-                                (np.expand_dims(np.array(list(map(lambda s: s.decode('ascii'), sids))), axis=1),
-                                 sess.run(self.encode_layers[-1].output, feed_dict=feed_dict)))
-                            data = np.vstack((data, batch))
-                        except tf.errors.OutOfRangeError:
-                            break
                     break
-        data_df = pd.DataFrame(data)
-        data_df.index = data_df[0]
-        data_df.drop(labels=[0], axis=1, inplace=True)
-        data_df.index.rename('sid', inplace=True)
-        data_df = data_df.sort_index()
-        data_df = data_df.iloc[1::FLAGS.num_corrupt + 1, :]
-        if to_file:
-            data_df.to_csv(path.join(path.dirname(FLAGS.output_dir), to_file))
 
-        return data_df.values
+        df = df.sort_index()
+
+        if to_file:
+            df.to_csv(path.join(path.dirname(FLAGS.output_dir), to_file))
+
+        scores_km = []
+        scores_ac = []
+        if est_sil:
+            for i in range(2, 10):
+                km = KMeans(n_clusters=i)
+                ac = AgglomerativeClustering(n_clusters=i)
+                labels_km = km.fit_predict(df)
+                labels_ac = ac.fit_predict(df)
+                scores_km.append(silhouette_score(df, labels_km))
+                scores_ac.append(silhouette_score(df, labels_ac))
+                print("KM CLUSTERS : {}, SIL_SCORE : {}".format(i, scores_km[-1]))
+                print("AG CLUSTERS : {}, SIL_SCORE : {}".format(i, scores_ac[-1]))
+
+        return df.values
 
     def plot_results(self):
         from sklearn.decomposition import PCA
         import matplotlib.pyplot as plt
 
         # TODO: Remove
-        labs = np.squeeze(pd.read_csv('soma_labels.csv').astype(np.float32).values)
+        #labs = np.squeeze(pd.read_csv('soma_labels.csv').astype(np.float32).values)
 
         data = self.encode()
         pca = PCA(n_components=2)
-        xy = pca.fit_transform(data[:, 1:])
-        plt.scatter(xy[:, 0], xy[:, 1], c=labs)
+        xy = pca.fit_transform(data[:, :])
+        plt.scatter(xy[:, 0], xy[:, 1]) #c=labs)
         plt.title("alpha={} beta={} lambda={} ncorr={}".format(
             FLAGS.emphasis_alpha,
             FLAGS.emphasis_beta,
@@ -440,10 +455,10 @@ def runner():
     timestamp = str(time()).replace('.', '')
     print("Assigning this run UID: {}".format(timestamp))
     print_config()
-    dom = DeepOmicModel(FLAGS.learn_rate)
+    dom = DeepOmicModel()
     dom.train_in_layers()
-    #dom.regression_select()
-    dom.encode("{}_{}.csv".format(FLAGS.output_pattern, timestamp))
+    # dom.regression_select()
+    dom.encode("{}_{}.csv".format(FLAGS.output_pattern, timestamp), True)
     dom.plot_results()
     print("Training Ended at: {}".format(datetime.now()))
 
