@@ -14,8 +14,8 @@ tf.flags.DEFINE_integer("batch_size", 30, "batch size")
 tf.flags.DEFINE_integer("num_parallel_calls", 8, "number of parallel dataset parsing threads "
                                                 "(recommended to be equal to number of CPU cores")
 tf.flags.DEFINE_integer("prefetch_buffer_size", 200, "size (in batches) of in-memory buffer to prefetch records before parsing")
-tf.flags.DEFINE_integer("num_comb_epochs", 400, "Number of epochs to train in combination.")
-tf.flags.DEFINE_integer("num_epochs", 300, "number of epochs for training")
+tf.flags.DEFINE_integer("num_comb_epochs", 200, "Number of epochs to train in combination.")
+tf.flags.DEFINE_integer("num_epochs", 100, "number of epochs for training")
 tf.flags.DEFINE_string("data_dir", path.realpath(__file__), "directory in which input data is located")
 tf.flags.DEFINE_string("output_dir", path.realpath(__file__), "directory in which to save encoded data")
 tf.flags.DEFINE_string("checkpoint_dir", path.join(path.dirname(path.realpath(__file__)), "tmp", ""),
@@ -29,7 +29,7 @@ tf.flags.DEFINE_bool("redirect_stdout", False, "redirects anything printed to st
 tf.flags.DEFINE_float("learn_rate", 0.001, "learning rate")
 tf.flags.DEFINE_integer("input_dims", 1317, "number of dimensions in the input dataset")
 tf.flags.DEFINE_list("layers", [1000, 500, 100, 50], "layer sizes from layer 0 to layer N, comma seperated values (e.g. 100,50,10")
-tf.flags.DEFINE_integer("seed", 101, "seed for initialization of layers")
+tf.flags.DEFINE_integer("seed", 1234, "seed for initialization of layers")
 
 
 FLAGS = tf.flags.FLAGS

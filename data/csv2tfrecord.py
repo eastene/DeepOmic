@@ -9,8 +9,8 @@ from glob import glob
 from sklearn.preprocessing import minmax_scale, normalize
 from utils.data_utils import split_omics
 
-DATA_DIR = '/Users/evan/PycharmProjects/DeepOmic/data/'
-FILE_PATTERN = DATA_DIR + '*.txt'
+DATA_DIR = '.'
+FILE_PATTERN = os.path.join(DATA_DIR, '*.txt')
 
 CORRUPTION_DROPOUT = False  # setting will make corruption set dimensions to 0 rather than adding random noise
 NUM_CORRUPT_EXAMPLES = 0  # number of corrupt examples
@@ -54,7 +54,7 @@ for f in csv_files:
 
     print("Writing " + base + '.tfrecord of {} records'.format(data.shape[0] + (data.shape[0] * NUM_CORRUPT_EXAMPLES)))
     records = 0
-    with tf.python_io.TFRecordWriter(base + '.tfrecord') as tfwriter:
+    with tf.io.TFRecordWriter(base + '.tfrecord') as tfwriter:
 
         for i in range(data.shape[0]):
             for j in range(NUM_CORRUPT_EXAMPLES + 1):  # do not corrupt on first loop
