@@ -16,7 +16,8 @@ def squared_emphasized_loss(labels,
                             corrupted_inds=None,
                             axis=0,
                             alpha=0.3,
-                            beta=0.7):
+                            beta=0.7,
+                            regularizer=None):
     """
     Compute squared loss over training examples that have been
     corrupted along certain dimensions
@@ -58,7 +59,8 @@ def cross_entropy_emphasized_loss(labels,
                                   corrupted_inds,
                                   axis=0,
                                   alpha=0.3,
-                                  beta=0.7):
+                                  beta=0.7,
+                                  regularizer=None):
     """
     Compute cross entropy loss over training examples that have been
     corrupted along certain dimensions
@@ -105,7 +107,8 @@ def squared_emphasized_sparse_loss(labels,
                             lam=0.01,
                             axis=0,
                             alpha=0.3,
-                            beta=0.7):
+                            beta=0.7,
+                            regularizer=None):
     """
         Compute squared loss over training examples that have been
         corrupted along certain dimensions and impose sparsity constraint
@@ -176,3 +179,20 @@ def squared_sparse_loss(labels,
     loss = tf.reduce_sum(tf.square(tf.subtract(labels, predictions))) + omega
 
     return loss / num_elems
+
+def mean_squared_error(labels,
+                        predictions,
+                        encoded,
+                        is_corr,
+                        ignore_corr,
+                        corrupted_inds=None,
+                        lam=0.01,
+                        axis=0,
+                        alpha=0.3,
+                        beta=0.7,
+                        regularizer=None):
+
+    loss = tf.losses.mean_squared_error(labels, predictions)
+    if regularizer is not None:
+        loss += tf.losses.get_regularization_loss()
+    return loss

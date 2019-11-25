@@ -34,7 +34,7 @@ class DeepOmicModel:
         self.alpha = FLAGS.emphasis_alpha
         self.beta = FLAGS.emphasis_beta
         self.lam = FLAGS.sparsity_lambda
-        self.loss = squared_emphasized_sparse_loss
+        self.loss = mean_squared_error  # squared_emphasized_sparse_loss
         self.optimizer = tf.train.AdamOptimizer
 
         # Model HPs
@@ -81,10 +81,10 @@ class DeepOmicModel:
         self._initialize_layers(self.input_dims, self.layers)
 
     def get_loss_func(self, labels, predictions, encoded, is_corr, lam, corrupted_inds, axis, alpha, beta,
-                      ignore_corr=False):
+                      ignore_corr=False, regularizer=None):
         return self.loss(labels=labels, predictions=predictions, encoded=encoded, is_corr=is_corr,
                          corrupted_inds=corrupted_inds, lam=lam, axis=axis, alpha=alpha, beta=beta,
-                         ignore_corr=ignore_corr)
+                         ignore_corr=ignore_corr, regularizer=regularizer)
 
     def get_optimizer(self, learning_rate, name="adam"):
         return self.optimizer(learning_rate=learning_rate, name=name)
@@ -199,10 +199,11 @@ class DeepOmicModel:
                 encoder_pref, decoder_pref = self.get_enc_dec_name(i)
 
                 # Get the loss function specified and pass it the "clean" input
+                regularizer = None if i == num_layers-1 else tf.nn.l2_loss
                 loss = self.get_loss_func(labels=self.expected, predictions=network,
                                           encoded=self.encode_layers[i].output, is_corr=self.is_corr,
                                           corrupted_inds=self.corrupt_mask, lam=self.lam, axis=0, alpha=self.alpha,
-                                          beta=self.beta)
+                                          beta=self.beta, regularizer=regularizer)
 
                 # for testing, use *pure* mean squared error
                 loss_sme = self.get_loss_func(labels=self.expected, predictions=network,
@@ -254,12 +255,12 @@ class DeepOmicModel:
             # Full depth network
             network = self.make_stack()
             # Optimize all variables at once
-            optimizer = self.get_optimizer(self.learning_rate / 10, "adam_comb")
-
+            optimizer = self.get_optimizer(self.learning_rate / 100, "adam_comb")
+            regularizer = None  # tf.nn.l2_loss
             # Get the loss function specified and pass it the "clean" input
             loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[-1].output,
                                       is_corr=self.is_corr, lam=self.lam, corrupted_inds=self.corrupt_mask, axis=0,
-                                      alpha=self.alpha, beta=self.beta)
+                                      alpha=self.alpha, beta=self.beta, regularizer=regularizer)
             # for testing, use *pure* mean squared error
             loss_sme = self.get_loss_func(labels=self.expected, predictions=network,
                                           encoded=self.encode_layers[-1].output, is_corr=self.is_corr,

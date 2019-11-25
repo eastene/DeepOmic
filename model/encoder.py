@@ -14,10 +14,14 @@ class Encoder:
         with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
             self.activation = tf.nn.leaky_relu
             self.initializer = tf.random_uniform_initializer(minval=-0.01, maxval=0.01)
+            # TODO make regularization occur only on layers with more parameters than N
+            self.regularizer = tf.nn.l2_loss
+            # if "_2" in self.name:
+            #     self.regularizer = None
             self.kernel = tf.get_variable("kernel", [input.shape[1], self.output_shape], initializer=self.initializer,
-                                          dtype=tf.float32)
+                                          dtype=tf.float32, regularizer=self.regularizer)
             self.bias = tf.get_variable("bias", [self.output_shape], initializer=self.initializer, dtype=tf.float32)
-            self.output = self.activation(tf.matmul(input,self.kernel) + self.bias)
+            self.output = self.activation(tf.matmul(input, self.kernel) + self.bias)
             # self.output = tf.matmul(input, self.kernel) + self.bias
             #
             # if self.end:
