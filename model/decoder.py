@@ -14,14 +14,9 @@ class Decoder:
         with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
             self.activation = tf.keras.activations.linear # tf.nn.leaky_relu
             self.initializer = tf.random_uniform_initializer(minval=-0.01, maxval=0.01)
+
             self.kernel = tf.transpose(enc_weights)
             self.bias = tf.get_variable("bias", [self.output_shape], initializer=self.initializer, dtype=tf.float32)
-            #self.output = self.activation(tf.matmul(inputs, self.kernel) + self.bias)
-            self.output = tf.matmul(inputs, self.kernel) + self.bias
-
-            # if self.end:
-            #     self.activation = tf.nn.softmax
-            #     self.output = self.activation(tf.matmul(inputs, self.kernel) + self.bias)
+            self.output = self.activation(tf.matmul(inputs, self.kernel) + self.bias)
 
         return self.output
-        # return self.layer(input)

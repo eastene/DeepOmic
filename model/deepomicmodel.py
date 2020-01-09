@@ -11,9 +11,7 @@ from model.decoder import Decoder
 from model.encoder import Encoder
 from model.input_pipeline import InputPipeline
 from model.loss import *
-from model.utils import print_config, redirects_stdout
-
-FILE_PATTERN = "*.tfrecord"
+from utils.experiment_utils import print_config, redirects_stdout
 
 
 class DeepOmicModel:
@@ -36,6 +34,7 @@ class DeepOmicModel:
         self.lam = FLAGS.sparsity_lambda
         self.loss = mean_squared_error  # squared_emphasized_sparse_loss
         self.optimizer = tf.train.AdamOptimizer
+        self.regularizer = FLAGS.reg
 
         # Model HPs
         self.layers = FLAGS.layers
@@ -47,7 +46,7 @@ class DeepOmicModel:
         """
 
         # Dataset Iterators
-        self.dataset = InputPipeline(FILE_PATTERN)
+        self.dataset = InputPipeline(FLAGS.input_pattern)
         self.next_train_elem = self.dataset.next_train_elem()
         self.next_eval_elem = self.dataset.next_eval_elem()
         self.next_encode_elem = self.dataset.next_encode_elem()
@@ -199,11 +198,10 @@ class DeepOmicModel:
                 encoder_pref, decoder_pref = self.get_enc_dec_name(i)
 
                 # Get the loss function specified and pass it the "clean" input
-                regularizer = None if i == num_layers-1 else tf.nn.l2_loss
                 loss = self.get_loss_func(labels=self.expected, predictions=network,
                                           encoded=self.encode_layers[i].output, is_corr=self.is_corr,
                                           corrupted_inds=self.corrupt_mask, lam=self.lam, axis=0, alpha=self.alpha,
-                                          beta=self.beta, regularizer=regularizer)
+                                          beta=self.beta, regularizer=self.regularizer)
 
                 # for testing, use *pure* mean squared error
                 loss_sme = self.get_loss_func(labels=self.expected, predictions=network,
@@ -256,11 +254,11 @@ class DeepOmicModel:
             network = self.make_stack()
             # Optimize all variables at once
             optimizer = self.get_optimizer(self.learning_rate / 100, "adam_comb")
-            regularizer = None  # tf.nn.l2_loss
+
             # Get the loss function specified and pass it the "clean" input
             loss = self.get_loss_func(labels=self.expected, predictions=network, encoded=self.encode_layers[-1].output,
                                       is_corr=self.is_corr, lam=self.lam, corrupted_inds=self.corrupt_mask, axis=0,
-                                      alpha=self.alpha, beta=self.beta, regularizer=regularizer)
+                                      alpha=self.alpha, beta=self.beta, regularizer=None)
             # for testing, use *pure* mean squared error
             loss_sme = self.get_loss_func(labels=self.expected, predictions=network,
                                           encoded=self.encode_layers[-1].output, is_corr=self.is_corr,
@@ -321,48 +319,6 @@ class DeepOmicModel:
             except tf.errors.OutOfRangeError:
                 break
         return m_tot / n_batches, sme_tot / n_batches
-
-    def regression_select(self):
-        num_layers = len(self.encode_layers)
-        with tf.Session() as sess:
-            # Train layers together
-            print("Training network with regression for %d epochs." % FLAGS.num_comb_epochs)
-            # Full depth network
-            network = self.make_stack()
-            # Optimize all variables at once
-            optimizer = self.get_optimizer(self.learning_rate / 100, "adam_comb_regression")
-
-            initializer = tf.random_uniform_initializer(minval=-0.01, maxval=0.01)
-            kernel = tf.get_variable("kernel", [FLAGS.layers[-1], 1], initializer=initializer,
-                                     dtype=tf.float32)
-            bias = tf.get_variable("bias", [1], initializer=initializer, dtype=tf.float32)
-            # self.output = self.activation(tf.matmul(input,self.kernel) + self.bias)
-            regressor = tf.matmul(self.encode_layers[-1].output, kernel) + bias
-
-            # for testing, use *pure* mean squared error
-            loss = tf.losses.mean_squared_error(labels=self.predictor, predictions=regressor)
-
-            train_op = optimizer.minimize(loss)
-
-            # Initialize variables.
-            sess.run(tf.global_variables_initializer())
-            # Restore layers
-            for j in range(num_layers):
-                if tf.train.checkpoint_exists(FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j)):
-                    print("Restoring layer " + str(j + 1) + " from checkpoint.")
-                    self.layer_savers[j].restore(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j))
-                else:
-                    print("ERROR: Layer %d not found." % j + 1)
-            # Run for FLAGS.num_comb_epochs epochs
-            for i in range(FLAGS.num_comb_epochs):
-                c, n_batches = self.run_epoch(sess, train_op, loss)
-                # print("Saving %d layers.\n" % num_layers)
-                for j in range(num_layers):
-                    self.layer_savers[j].save(sess, FLAGS.checkpoint_dir + self.get_layer_checkpoint_dirname(j))
-                ts_loss, ts_loss_pure = self.get_test_acc(sess, loss, loss)
-                print("\rLoss: {:.3f}".format(c / n_batches) + " Test Set Loss: {:.3f}".format(
-                    ts_loss) + " SME-only Test Loss: {:.3f}".format(ts_loss_pure) + " at Epoch " + str(i), end="")
-            print("\n")
 
     def encode(self, to_file="", est_sil=False):
         # output dataframe

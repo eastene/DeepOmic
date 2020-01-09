@@ -150,7 +150,10 @@ def squared_emphasized_sparse_loss(labels,
         squares = tf.square(tf.subtract(labels, predictions))
         axis_mean = tf.reduce_mean(tf.multiply(squares, mults), axis=axis)
 
-    return tf.reduce_mean(axis_mean)  # + omega)
+    loss = tf.reduce_mean(axis_mean)  # + omega)
+    if regularizer is not None:
+        loss += tf.losses.get_regularization_loss()
+    return loss
 
 
 def squared_sparse_loss(labels,
