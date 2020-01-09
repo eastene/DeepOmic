@@ -8,3 +8,5 @@ venv/
 # Data files
 *.tfrecord
 *.csv
+*.txt
+*.gz

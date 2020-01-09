@@ -3,8 +3,19 @@ from contextlib import redirect_stdout
 
 from model.flags import FLAGS
 
+"""
+#
+# Utils to aid in experimentation
+#
+"""
+
+"""
+Function Decorators
+"""
+
 
 def redirects_stdout(func):
+
     def capture_wrapper(*args, **kwargs):
         if FLAGS.redirect_stdout:
             with open(path.join(path.dirname(FLAGS.output_dir), FLAGS.output_pattern + '.log'), 'a') as f:
@@ -17,6 +28,11 @@ def redirects_stdout(func):
         return results
 
     return capture_wrapper
+
+
+"""
+Misc. Utils
+"""
 
 
 def print_config():
