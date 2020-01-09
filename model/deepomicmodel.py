@@ -391,12 +391,12 @@ class DeepOmicModel:
         import matplotlib.pyplot as plt
 
         # TODO: Remove
-        #labs = np.squeeze(pd.read_csv('soma_labels.csv').astype(np.float32).values)
+        # labs = np.squeeze(pd.read_csv('soma_labels.csv').astype(np.float32).values)
 
         data = self.encode()
         pca = PCA(n_components=2)
         xy = pca.fit_transform(data[:, :])
-        plt.scatter(xy[:, 0], xy[:, 1]) #c=labs)
+        plt.scatter(xy[:, 0], xy[:, 1])  # c=labs)
         plt.title("alpha={} beta={} lambda={} ncorr={}".format(
             FLAGS.emphasis_alpha,
             FLAGS.emphasis_beta,
@@ -415,7 +415,9 @@ def runner():
     dom = DeepOmicModel()
     dom.train_in_layers()
     # dom.regression_select()
-    dom.encode("{}_{}.csv".format(FLAGS.output_pattern, timestamp), True)
+    out_file = "{}.csv".format(FLAGS.output_pattern) if FLAGS.no_timestamp else "{}_{}.csv".format(FLAGS.output_pattern,
+                                                                                                   timestamp),
+    dom.encode(out_file, True)
     dom.plot_results()
     print("Training Ended at: {}".format(datetime.now()))
 
