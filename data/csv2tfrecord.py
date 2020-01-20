@@ -51,8 +51,7 @@ def csv2tfrecord(file_pattern="*.csv",
         else:
             data = data.values
 
-        filename = os.path.split(f)[1]
-        base, ext = os.path.splitext(filename)
+        base, ext = os.path.splitext(f)
         print("Read in {} records with {} columns".format(data.shape[0], data.shape[1]))
         print("Generating {} corrupt records per record read".format(NUM_CORRUPT_EXAMPLES))
 
