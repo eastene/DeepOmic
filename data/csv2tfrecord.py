@@ -40,7 +40,7 @@ def csv2tfrecord(file_pattern="*.csv",
 
     for f in csv_files:
 
-        data = pd.read_csv(f, low_memory=False, delimiter='\t', index_col=0)
+        data = pd.read_csv(f, low_memory=False, delimiter=',', index_col=0)
 
         sids = data.index
 
