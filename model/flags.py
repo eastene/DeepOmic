@@ -16,11 +16,12 @@ tf.flags.DEFINE_string("input_pattern", "*.tfrecord", "pattern of input files")
 # Output flags
 tf.flags.DEFINE_string("output_pattern", "ae_out", "output file pattern for both logging and encoding")
 tf.flags.DEFINE_bool("no_timestamp", False, "do not add timestamp to output filename if set")
+tf.flags.DEFINE_bool("plot_2D", False, "produce a 2D PC plot of the embeddings after encoding")
 tf.flags.DEFINE_string("output_dir", path.split(path.realpath(__file__))[0], "directory in which to save encoded data")
 tf.flags.DEFINE_bool("redirect_stdout", False, "redirects anything printed to stdout to a file prefixed by "
                                                "output_pattern in output_dir")
 
-# Model sizing and saving flags
+# Model sizing and checkpointing flags
 tf.flags.DEFINE_integer("input_dims", 1317, "number of dimensions in the input dataset")
 tf.flags.DEFINE_list("layers", [1000, 500, 100, 50], "layer sizes from layer 0 to layer N, comma seperated values "
                                                      "(e.g. 100,50,10")

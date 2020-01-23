@@ -408,17 +408,22 @@ class DeepOmicModel:
 
 @redirects_stdout
 def runner():
+    # CONFIGURATION
     print("Training Started at: {}".format(datetime.now()))
     timestamp = str(time()).replace('.', '')
     print("Assigning this run UID: {}".format(timestamp))
     print_config()
+
+    # TRAINING
     dom = DeepOmicModel()
     dom.train_in_layers()
-    # dom.regression_select()
-    out_file = "{}.csv".format(FLAGS.output_pattern) if FLAGS.no_timestamp else "{}_{}.csv".format(FLAGS.output_pattern,
-                                                                                                   timestamp)
+
+    # ENCODING/OUTPUT
+    out_file = "{}.csv".format(FLAGS.output_pattern) if FLAGS.no_timestamp else \
+        "{}_{}.csv".format(FLAGS.output_pattern, timestamp)
     dom.encode(out_file, True)
-    dom.plot_results()
+    if FLAGS.plot_2D:
+        dom.plot_results()
     print("Training Ended at: {}".format(datetime.now()))
 
 
