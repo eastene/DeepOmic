@@ -84,3 +84,7 @@ def csv2tfrecord(file_pattern="*.csv",
                     records += 1
 
         print("{} records successfully writen".format(records))
+
+
+if __name__ == "__main__":
+    csv2tfrecord()

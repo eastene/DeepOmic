@@ -30,10 +30,10 @@ tf.flags.DEFINE_string("checkpoint_dir", path.join(path.dirname(path.realpath(__
                        "this file's directory")
 
 # Training flags
-tf.flags.DEFINE_integer("batch_size", 30, "batch size")
+tf.flags.DEFINE_integer("batch_size", 32, "batch size")
 tf.flags.DEFINE_integer("num_epochs", 100, "number of epochs for pre-training")
 tf.flags.DEFINE_integer("num_comb_epochs", 200, "Number of epochs to train in combination (finetuning).")
-tf.flags.DEFINE_float("learn_rate", 0.001, "learning rate")
+tf.flags.DEFINE_float("learn_rate", 0.01, "learning rate")
 tf.flags.DEFINE_integer("num_corrupt", 0, "number of corrupted examples per original examples")
 
 # Loss function flags
